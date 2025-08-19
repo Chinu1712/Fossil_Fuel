@@ -138,50 +138,30 @@ def show_continent_stats(df):
 # Gemini Chatbot (in its own tab)
 # =========================
 # Your key: we check secrets/env, then fall back to the value you provided.
-HARDCODED_GEMINI_KEY = "AIzaSyC8k_3PlhGYuHd7z0MXrYgMxhMAU8AEbhU"
-
 def get_gemini_key() -> str:
+    # Load from Streamlit Secrets or Environment variable
     key = st.secrets.get("GEMINI_API_KEY", "")
     if not key:
         key = os.getenv("GEMINI_API_KEY", "")
-    if not key:
-        key = HARDCODED_GEMINI_KEY  # fallback (you can delete this line later)
     return key
 
 def gemini_reply(user_message: str, history: list) -> str:
-    """
-    Calls Gemini 1.5 Flash via REST. History is a list of {"role": "user"|"model", "content": "..."}.
-    """
     api_key = get_gemini_key()
     if not api_key:
-        return "❗ Gemini API key missing."
+        return "❗ Gemini API key is missing. Please set it in Streamlit Secrets."
 
-    contents = []
-    for m in history:
-        role = "user" if m["role"] == "user" else "model"
-        contents.append({"role": role, "parts": [{"text": m["content"]}]})
+    contents = [{"role": m["role"] if m["role"] in ("user","model") else "user",
+                 "parts": [{"text": m["content"]}]} for m in history]
     contents.append({"role": "user", "parts": [{"text": user_message}]})
 
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-    headers = {"Content-Type": "application/json"}
-    params = {"key": api_key}
-    payload = {"contents": contents}
-
-    try:
-        r = requests.post(url, headers=headers, params=params, json=payload, timeout=60)
-        r.raise_for_status()
-        data = r.json()
-        text = (
-            data.get("candidates", [{}])[0]
-                .get("content", {})
-                .get("parts", [{}])[0]
-                .get("text", "")
-        )
-        return text or "I couldn't generate a response."
-    except requests.HTTPError as e:
-        return f"HTTP error from Gemini: {e} — {getattr(e, 'response', None) and e.response.text}"
-    except Exception as e:
-        return f"Error contacting Gemini: {e}"
+    r = requests.post(url, params={"key": api_key},
+                      headers={"Content-Type": "application/json"},
+                      json={"contents": contents}, timeout=60)
+    r.raise_for_status()
+    data = r.json()
+    return (data.get("candidates", [{}])[0]
+                .get("content", {}).get("parts", [{}])[0].get("text", "")) or "⚠️ No response."
 
 def chatbot_tab():
     st.markdown('<h2 class="sub-header">💬 Chatbot</h2>', unsafe_allow_html=True)
