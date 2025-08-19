@@ -21,6 +21,7 @@ st.markdown("""
     .main-header { font-size: 3rem; color: #2E8B57; text-align: center; margin-bottom: 2rem; }
     .sub-header  { font-size: 1.5rem; color: #4682B4; margin-bottom: 1rem; }
     .metric-card, .prediction-result, .highlight-box { background-color: #1e2130; color: #ffffff !important; }
+    .prediction-result h4, .highlight-box h4 { color: #2E8B57 !important; }
     .highlight-box { border-left: 8px solid #2E8B57; padding: 1.5rem; border-radius: 0.5rem; margin: 2rem 0; }
     .impact-point { display: flex; align-items: center; margin-bottom: 1rem; }
     .impact-point .icon { font-size: 2rem; margin-right: 1rem; color: #2E8B57; }
@@ -89,18 +90,45 @@ def show_co2_predictor():
         st.error("⚠️ Model not loaded.")
         return
 
+    # Sidebar inputs
     population = st.sidebar.number_input("Population", value=330000000)
     gdp = st.sidebar.number_input("GDP (billion USD)", value=25000.0)
     energy_per_capita = st.sidebar.number_input("Energy per Capita (kWh)", value=12000.0)
     primary_energy_consumption = st.sidebar.number_input("Primary Energy Consumption (TWh)", value=2500.0)
+    cement_co2 = st.sidebar.number_input("Cement CO2 (Mt)", value=50.0)
+    coal_co2 = st.sidebar.number_input("Coal CO2 (Mt)", value=1200.0)
+    oil_co2 = st.sidebar.number_input("Oil CO2 (Mt)", value=800.0)
+    gas_co2 = st.sidebar.number_input("Gas CO2 (Mt)", value=600.0)
+    flaring_co2 = st.sidebar.number_input("Flaring CO2 (Mt)", value=10.0)
+    methane = st.sidebar.number_input("Methane (Mt CO2eq)", value=300.0)
+    nitrous_oxide = st.sidebar.number_input("Nitrous Oxide (Mt CO2eq)", value=100.0)
     year = st.sidebar.slider("Year", 1990, 2030, 2023)
 
     if st.sidebar.button("🔮 Predict CO2 Emissions"):
-        x = pd.DataFrame([[year, population, gdp*1e9, energy_per_capita, primary_energy_consumption]], 
-                         columns=["year","population","gdp","energy_per_capita","primary_energy_consumption"])
-        x_scaled = scaler.transform(x)
-        pred = float(model.predict(x_scaled)[0])
-        st.success(f"🌍 Predicted CO2 Emissions: {pred:.2f} Mt")
+        try:
+            # Use full feature preparation
+            x = prepare_input_data("United States", year, population, gdp, energy_per_capita,
+                                   primary_energy_consumption, cement_co2, coal_co2, oil_co2,
+                                   gas_co2, flaring_co2, methane, nitrous_oxide, features)
+            x_scaled = scaler.transform(x)
+            pred = float(model.predict(x_scaled)[0])
+
+            # Display metrics
+            st.success(f"🌍 Predicted CO2 Emissions: {pred:.2f} Mt")
+            per_capita = (pred * 1e6) / population
+            st.info(f"Per Capita Emissions: {per_capita:.2f} tonnes per person")
+
+            # Chart
+            if sample_data is not None and {"year","country","co2"}.issubset(sample_data.columns):
+                recent = (sample_data[sample_data["year"] >= 2020]
+                          .groupby("country")["co2"].mean().sort_values(ascending=False).head(10))
+                fig = px.bar(x=recent.values, y=recent.index, orientation='h',
+                             title="Top 10 Countries by Avg CO2 Emissions (2020+)",
+                             labels={'x':'CO2 Emissions (Mt)','y':'Country'},
+                             color=recent.values, color_continuous_scale='Reds')
+                st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.error(f"Prediction failed: {e}")
 
 def show_ev_benefits():
     st.markdown('<h2 class="sub-header">💰 Cost Comparison: EV vs Gasoline Car</h2>', unsafe_allow_html=True)
@@ -134,6 +162,45 @@ def show_ev_statistics():
     fig = px.line(x=years, y=global_ev_sales, title="Global Electric Vehicle Sales (2015-2023)",
                   labels={'x': 'Year', 'y': 'Sales (Millions)'}, markers=True)
     st.plotly_chart(fig, use_container_width=True)
+
+# ---------- Helper ----------
+def prepare_input_data(country, year, population, gdp, energy_per_capita,
+                       primary_energy_consumption, cement_co2, coal_co2, oil_co2,
+                       gas_co2, flaring_co2, methane, nitrous_oxide, features):
+    x = {f: 0 for f in features}
+    x['year'] = year
+    x['population'] = population
+    x['gdp'] = gdp * 1e9
+    x['energy_per_capita'] = energy_per_capita
+    x['primary_energy_consumption'] = primary_energy_consumption
+    x['cement_co2'] = cement_co2
+    x['coal_co2'] = coal_co2
+    x['oil_co2'] = oil_co2
+    x['gas_co2'] = gas_co2
+    x['flaring_co2'] = flaring_co2
+    x['methane'] = methane
+    x['nitrous_oxide'] = nitrous_oxide
+
+    # Derived features
+    x['year_sq'] = year ** 2
+    x['year_cub'] = year ** 3
+    x['gdp_per_capita'] = x['gdp'] / max(population, 1)
+    x['energy_per_capita_log'] = np.log1p(energy_per_capita)
+    x['population_log'] = np.log1p(population)
+    x['gdp_log'] = np.log1p(x['gdp'])
+    x['cement_co2_log'] = np.log1p(cement_co2)
+    x['coal_co2_log'] = np.log1p(coal_co2)
+    x['flaring_co2_log'] = np.log1p(flaring_co2)
+    x['gas_co2_log'] = np.log1p(gas_co2)
+    x['oil_co2_log'] = np.log1p(oil_co2)
+    x['gdp_x_energy'] = x['gdp'] * energy_per_capita
+    x['population_x_gdp'] = population * x['gdp']
+
+    cfeat = f'country_{country}'
+    if cfeat in x: 
+        x[cfeat] = 1
+
+    return pd.DataFrame([x])
 
 # ---------- Entrypoint ----------
 if "page" not in st.session_state: st.session_state["page"] = "landing"
