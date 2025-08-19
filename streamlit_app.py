@@ -1,3 +1,4 @@
+# streamlit_app.py
 import warnings
 from pathlib import Path
 import os
@@ -7,13 +8,6 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 import joblib
-
-# Floating UI helper
-try:
-    from streamlit_float import float_init
-    HAVE_FLOAT = True
-except Exception:
-    HAVE_FLOAT = False
 
 warnings.filterwarnings("ignore")
 BASE_DIR = Path(__file__).resolve().parent
@@ -27,11 +21,13 @@ st.markdown("""
   :root{
     --bg:#0e1117;--fg:#ffffff;--muted:#bcc3cf;--card:#1e2130;--border:rgba(255,255,255,.08);
     --accent:#37c77f;--link:#8ab4f8;--danger:#ff6b6b;--shadow:rgba(0,0,0,.3);
+    --chip:#2b3348;
   }
   @media (prefers-color-scheme: light){
     :root{
       --bg:#f8fafc;--fg:#0f172a;--muted:#334155;--card:#ffffff;--border:rgba(15,23,42,.08);
       --accent:#0ea5e9;--link:#2563eb;--danger:#e11d48;--shadow:rgba(15,23,42,.15);
+      --chip:#e5e7eb;
     }
   }
   .stApp, body{background:var(--bg); color:var(--fg);}
@@ -40,6 +36,7 @@ st.markdown("""
   .card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:1rem 1.2rem; box-shadow:0 10px 24px var(--shadow);}
   .accent{color:var(--accent);}
   .pill{background:linear-gradient(90deg,#2563eb,#16a34a); height:12px; border-radius:999px; margin:.6rem 0;}
+  .chip{display:inline-block;background:var(--chip);color:var(--fg);padding:.3rem .6rem;border-radius:999px;margin:.2rem .2rem;}
   .btn-wide>button{width:100% !important;}
 
   /* Floating FAB + Chat window */
@@ -53,7 +50,7 @@ st.markdown("""
   .chat-window{
     position:fixed; right:22px; bottom:90px; z-index:9998; width:min(380px, 92vw); max-height:min(70vh, 640px);
     background:var(--card); color:var(--fg); border:1px solid var(--border); border-radius:16px; overflow:hidden;
-    box-shadow:0 20px 40px var(--shadow);
+    box-shadow:0 20px 40px var(--shadow); display:none;
   }
   .chat-header{display:flex; align-items:center; justify-content:space-between; padding:.75rem 1rem; border-bottom:1px solid var(--border);}
   .chat-title{font-weight:600; color:var(--fg);}
@@ -63,8 +60,9 @@ st.markdown("""
   .me{background:rgba(37,99,235,.15);}
   .bot{background:rgba(55,199,127,.15);}
   .chat-input{display:flex; gap:.5rem; padding:.6rem; border-top:1px solid var(--border); background:var(--card);}
-  .chat-input input{
+  .chat-input textarea{
     flex:1; border:1px solid var(--border); border-radius:12px; padding:.55rem .7rem; background:transparent; color:var(--fg);
+    height:66px; resize:vertical;
   }
   .chat-send{border:none; border-radius:10px; padding:.55rem .9rem; background:var(--accent); color:#fff; cursor:pointer;}
 </style>
@@ -113,7 +111,7 @@ def prepare_input_data(
     x["methane"] = methane
     x["nitrous_oxide"] = nitrous_oxide
 
-    # engineered (match training)
+    # engineered features (must match training)
     x["year_sq"] = year**2
     x["year_cub"] = year**3
     x["gdp_per_capita"] = x["gdp"] / max(population, 1)
@@ -128,7 +126,6 @@ def prepare_input_data(
     x["gdp_x_energy"] = x["gdp"] * energy_per_capita
     x["population_x_gdp"] = population * x["gdp"]
 
-    # country one-hot if exists
     cfeat = f"country_{country}"
     if cfeat in x:
         x[cfeat] = 1
@@ -178,16 +175,16 @@ def show_continent_stats(df):
         st.plotly_chart(fig2, use_container_width=True)
 
 # =========================
-# Gemini Chatbot (floating)
+# Gemini Chatbot (floating) — via query params (no hardcoded key)
 # =========================
-def get_gemini_key() -> str:
+def _get_gemini_key() -> str:
     key = st.secrets.get("GEMINI_API_KEY", "")
     if not key:
         key = os.getenv("GEMINI_API_KEY", "")
     return key
 
-def gemini_reply(user_message: str, history: list) -> str:
-    api_key = get_gemini_key()
+def _gemini_reply(user_message: str, history: list) -> str:
+    api_key = _get_gemini_key()
     if not api_key:
         return "❗ Gemini API key is missing. Please set it in Streamlit Secrets."
 
@@ -211,97 +208,114 @@ def gemini_reply(user_message: str, history: list) -> str:
     except Exception as e:
         return f"Error: {e}"
 
+def _escape_html(text: str) -> str:
+    return (text.replace("&","&amp;")
+                .replace("<","&lt;")
+                .replace(">","&gt;"))
+
 def render_floating_chat():
-    if "chat_open" not in st.session_state:
-        st.session_state.chat_open = False
+    # Session chat
     if "chat" not in st.session_state:
-        st.session_state.chat = [{"role": "model",
-                                  "content": "Hi! Ask me about EV benefits, emissions, charts, or how to use this app."}]
+        st.session_state.chat = [{"role":"model","content":"Hi! Ask about EV savings, emissions, charts, or this app."}]
 
-    # We render HTML buttons and bind them to Streamlit via query params-ish toggles
-    placeholder = st.empty()  # keep a mount point
+    # Process query param if user sent from popup
+    q = st.experimental_get_query_params()
+    msg = q.get("chatq", [None])[0]
+    keep_open = q.get("open", ["0"])[0] == "1"
 
-    # If we can, make the containers actually float
-    if HAVE_FLOAT:
-        float_init()
+    if msg:
+        msg = msg.strip()
+        if msg:
+            st.session_state.chat.append({"role":"user","content":msg})
+            reply = _gemini_reply(msg, st.session_state.chat)
+            st.session_state.chat.append({"role":"model","content":reply})
+        # clear param to avoid re-sending on refresh; keep open
+        st.experimental_set_query_params(open="1")
 
-    # FAB
-    with placeholder.container():
-        st.markdown(
-            f"""
-            <button class="fab" onclick="window.parent.postMessage({{type:'toggle_chat'}}, '*')">💬</button>
-            """,
-            unsafe_allow_html=True
-        )
+    # Build messages HTML
+    bubbles = []
+    for m in st.session_state.chat:
+        role_cls = "me" if m["role"] == "user" else "bot"
+        bubbles.append('<div class="bubble '+role_cls+'">'+_escape_html(m["content"])+'</div>')
+    messages_html = "".join(bubbles)
 
-        # Chat Window (hidden unless open)
-        display = "block" if st.session_state.chat_open else "none"
-        st.markdown(
-            f"""
-            <div class="chat-window" id="chatwin" style="display:{display};">
-              <div class="chat-header">
-                <div class="chat-title">AI Assistant</div>
-                <button class="chat-close" onclick="window.parent.postMessage({{type:'toggle_chat'}}, '*')">✕</button>
-              </div>
-              <div class="chat-body" id="chatbody">
-                {"".join([
-                  f'<div class="bubble {"me" if m["role"]=="user" else "bot"}">{m["content"]}</div>'
-                  for m in st.session_state.chat
-                ])}
-              </div>
-              <div class="chat-input">
-                <input id="chat_input" placeholder="Type your question..." onkeydown="if(event.key==='Enter') window.parent.postMessage({{type:'send_chat'}}, '*')">
-                <button class="chat-send" onclick="window.parent.postMessage({{type:'send_chat'}}, '*')">Send</button>
-              </div>
-            </div>
-            <script>
-              // simple bridge: toggle + send events back to Streamlit via set query params
-              window.addEventListener('message', (e)=>{
-                if(!e.data) return;
-                if(e.data.type==='toggle_chat'){ window.location.hash = (window.location.hash==='#open' ? '' : '#open'); window.parent.postMessage({{type:'rerun'}}, '*'); }
-                if(e.data.type==='send_chat'){ window.location.hash = '#send'; window.parent.postMessage({{type:'rerun'}}, '*'); }
-                if(e.data.type==='rerun'){ setTimeout(()=>{{ window.parent.postMessage({{type:'streamlit:rerun'}}, '*'); }}, 10); }
-              });
-            </script>
-            """,
-            unsafe_allow_html=True
-        )
+    # Floating button & popup (pure HTML/JS; not an f-string)
+    html = """
+<button class="fab" id="fabBtn" title="Ask the assistant">💬</button>
 
-    # Read hash to toggle / send
-    hash_val = st.experimental_get_query_params().get("_", [""])[0]  # unused; kept to avoid caching
-    # We can inspect st.session_state for a light toggle: we’ll use st.query_params via JS hash
-    # Use the URL fragment accessible via `st.query_params` (Streamlit doesn't expose hash; we emulate via rerun events)
+<div class="chat-window" id="chatWin">
+  <div class="chat-header">
+    <div class="chat-title">AI Assistant</div>
+    <button class="chat-close" id="chatClose">✕</button>
+  </div>
+  <div class="chat-body" id="chatBody">
+"""
+    html += messages_html
+    html += """
+  </div>
+  <div class="chat-input">
+    <textarea id="chatInput" placeholder="Type your question..."></textarea>
+    <button class="chat-send" id="chatSend">Send</button>
+  </div>
+</div>
 
-    # Backend toggle using the browser hash content via the special widget below:
-    hash_box = st.text_input("", value="", key="__invisible__", label_visibility="collapsed", help="ignore me")
-    # (This invisible box exists only to trigger reruns on hash change via the JS above.)
+<script>
+(function(){
+  const win = parent.document; // Streamlit runs inside an iframe
+  const fab = win.getElementById("fabBtn");
+  const box = win.getElementById("chatWin");
+  const closeBtn = win.getElementById("chatClose");
+  const sendBtn = win.getElementById("chatSend");
+  const input = win.getElementById("chatInput");
 
-    # Process a pseudo-hash by checking the actual JS toggled state we encoded with hash:
-    # Since Streamlit cannot read hash directly, we simply flip state on every rerun if the DOM asked it.
-    # To keep predictable, we store a latch in session_state: when JS posts 'toggle', we flip.
-    if "_pending_toggle" not in st.session_state:
-        st.session_state._pending_toggle = False
-    if "_pending_send" not in st.session_state:
-        st.session_state._pending_send = False
+  if(!fab || !box) return;
 
-    # Use a small trick: when the hidden input changes (any rerun), check the browser hash by injecting small JS is not supported.
-    # Instead, we expose two buttons that JS "clicks" via postMessage. We've already posted 'rerun' events; here we can't detect them reliably.
-    # So we fall back to explicit Streamlit controls below too:
-    col_a, col_b = st.columns([1,1])
-    with col_a:
-        if st.button("🟡 toggle_chat", key="__toggle__"):
-            st.session_state.chat_open = not st.session_state.chat_open
-    with col_b:
-        # Send message using a Streamlit text_input when chat is open
-        if st.session_state.chat_open:
-            user_msg = st.text_input("Type your message here", key="__chat_msg__", label_visibility="collapsed")
-            if st.button("Send", key="__send__"):
-                if user_msg.strip():
-                    st.session_state.chat.append({"role": "user", "content": user_msg.strip()})
-                    with st.spinner("Thinking…"):
-                        reply = gemini_reply(user_msg.strip(), st.session_state.chat)
-                    st.session_state.chat.append({"role": "model", "content": reply})
-                st.rerun()
+  function openBox(){ box.style.display = "block"; }
+  function closeBox(){ box.style.display = "none"; }
+
+  // Start open if URL has ?open=1
+  try{
+    const sp = new URLSearchParams(win.location.search);
+    if(sp.get("open")==="1"){ openBox(); }
+  }catch(e){}
+
+  fab.onclick = function(){
+    if(box.style.display==="block"){ closeBox(); }
+    else{
+      openBox();
+      // add open=1 so it stays open across reruns
+      try{
+        const u = new URL(win.location.href);
+        u.searchParams.set("open","1");
+        win.history.replaceState({}, "", u.toString());
+      }catch(e){}
+    }
+  };
+  if(closeBtn) closeBtn.onclick = function(){
+    closeBox();
+    try{
+      const u = new URL(win.location.href);
+      u.searchParams.delete("open");
+      win.history.replaceState({}, "", u.toString());
+    }catch(e){}
+  };
+
+  function send(){
+    const val = (input && input.value || "").trim();
+    if(!val) return;
+    try{
+      const u = new URL(win.location.href);
+      u.searchParams.set("chatq", val);
+      u.searchParams.set("open","1");
+      win.location.href = u.toString(); // reload with message
+    }catch(e){}
+  }
+  if(sendBtn) sendBtn.onclick = send;
+  if(input) input.addEventListener("keydown", function(ev){ if(ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); send(); }});
+})();
+</script>
+"""
+    st.markdown(html, unsafe_allow_html=True)
 
 # =========================
 # Pages
@@ -312,19 +326,21 @@ def show_landing_page():
         '<div class="card" style="text-align:center;">'
         '<p style="font-size:1.1rem;margin:.2rem 0;">'
         'Understand emissions, explore EV savings, and see continent-level patterns with clean, theme-aware visuals.'
-        '</p></div>', unsafe_allow_html=True)
+        '</p>'
+        '<div class="chip">Predict CO₂</div> <div class="chip">Compare EV vs Gas</div> <div class="chip">Continent Stats</div>'
+        '</div>', unsafe_allow_html=True)
 
     st.markdown('<h2 class="sub-header">💡 What you can do here</h2>', unsafe_allow_html=True)
     st.markdown("""
 <div class="card">
   <ul>
     <li><b>Predict</b> annual CO₂ using macro + energy inputs (with engineered features) up to year 2070.</li>
-    <li><b>Compare</b> running costs: EV vs gasoline—see your yearly & 5-year savings with live charts.</li>
+    <li><b>Compare</b> running costs: EV vs gasoline—see yearly & 5-year savings with live charts.</li>
     <li><b>Visualize</b> source mix (coal/oil/gas/cement/flaring) with pie + bar charts.</li>
     <li><b>Explore</b> continent rollups and stacked source bars for global context.</li>
   </ul>
   <div class="pill"></div>
-  <p style="opacity:.9"><b>Note:</b> Years far in the future are scenario extrapolations.</p>
+  <p style="opacity:.9"><b>Note:</b> Future years are scenario extrapolations—use as directional insight, not forecasts.</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -512,7 +528,7 @@ def show_main_app():
     if st.button("⬅️ Back to Landing Page", key="back", use_container_width=True):
         st.session_state.page = "landing"
 
-    # Floating assistant (always on)
+    # Floating assistant (always available)
     render_floating_chat()
 
 # =========================
