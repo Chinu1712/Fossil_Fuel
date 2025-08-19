@@ -8,22 +8,65 @@ import plotly.express as px
 import streamlit as st
 import joblib
 
+# Floating UI helper
+try:
+    from streamlit_float import float_init
+    HAVE_FLOAT = True
+except Exception:
+    HAVE_FLOAT = False
+
 warnings.filterwarnings("ignore")
 BASE_DIR = Path(__file__).resolve().parent
 
 # =========================
-# Page + Dark theme CSS
+# Page + Theme-aware CSS
 # =========================
 st.set_page_config(page_title="CO2 Emission Predictor & EV Awareness", page_icon="🌍", layout="wide")
 st.markdown("""
 <style>
-  .stApp, body { background:#0e1117; color:#fff; }
-  .main-header { font-size:2.6rem; color:#37c77f; text-align:center; margin:0 0 1rem 0; }
-  .sub-header  { font-size:1.6rem; color:#8ab4f8; margin:1rem 0 .6rem 0; }
-  .card { background:#1e2130; border:1px solid rgba(255,255,255,.06); border-radius:14px; padding:1rem 1.2rem; }
-  .accent { color:#37c77f; }
-  .pill { background:linear-gradient(90deg,#2563eb,#16a34a); height:12px; border-radius:999px; margin:.6rem 0; }
-  .btn-wide>button { width:100% !important; }
+  :root{
+    --bg:#0e1117;--fg:#ffffff;--muted:#bcc3cf;--card:#1e2130;--border:rgba(255,255,255,.08);
+    --accent:#37c77f;--link:#8ab4f8;--danger:#ff6b6b;--shadow:rgba(0,0,0,.3);
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#f8fafc;--fg:#0f172a;--muted:#334155;--card:#ffffff;--border:rgba(15,23,42,.08);
+      --accent:#0ea5e9;--link:#2563eb;--danger:#e11d48;--shadow:rgba(15,23,42,.15);
+    }
+  }
+  .stApp, body{background:var(--bg); color:var(--fg);}
+  .main-header{font-size:2.6rem; color:var(--accent); text-align:center; margin:0 0 1rem;}
+  .sub-header{font-size:1.6rem; color:var(--link); margin:1rem 0 .6rem;}
+  .card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:1rem 1.2rem; box-shadow:0 10px 24px var(--shadow);}
+  .accent{color:var(--accent);}
+  .pill{background:linear-gradient(90deg,#2563eb,#16a34a); height:12px; border-radius:999px; margin:.6rem 0;}
+  .btn-wide>button{width:100% !important;}
+
+  /* Floating FAB + Chat window */
+  .fab{
+    position:fixed; right:22px; bottom:22px; z-index:9999;
+    width:54px; height:54px; border-radius:999px; display:flex; align-items:center; justify-content:center;
+    background:var(--accent); color:#fff; border:none; box-shadow:0 10px 24px var(--shadow); cursor:pointer;
+    font-size:26px; line-height:1;
+  }
+  .fab:hover{filter:brightness(0.95);}
+  .chat-window{
+    position:fixed; right:22px; bottom:90px; z-index:9998; width:min(380px, 92vw); max-height:min(70vh, 640px);
+    background:var(--card); color:var(--fg); border:1px solid var(--border); border-radius:16px; overflow:hidden;
+    box-shadow:0 20px 40px var(--shadow);
+  }
+  .chat-header{display:flex; align-items:center; justify-content:space-between; padding:.75rem 1rem; border-bottom:1px solid var(--border);}
+  .chat-title{font-weight:600; color:var(--fg);}
+  .chat-close{background:transparent; color:var(--muted); border:none; font-size:20px; cursor:pointer;}
+  .chat-body{padding:10px 12px; overflow:auto; max-height:50vh;}
+  .bubble{padding:.6rem .8rem; border-radius:12px; margin:.35rem 0; width:fit-content; max-width:92%;}
+  .me{background:rgba(37,99,235,.15);}
+  .bot{background:rgba(55,199,127,.15);}
+  .chat-input{display:flex; gap:.5rem; padding:.6rem; border-top:1px solid var(--border); background:var(--card);}
+  .chat-input input{
+    flex:1; border:1px solid var(--border); border-radius:12px; padding:.55rem .7rem; background:transparent; color:var(--fg);
+  }
+  .chat-send{border:none; border-radius:10px; padding:.55rem .9rem; background:var(--accent); color:#fff; cursor:pointer;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -101,12 +144,12 @@ def show_source_breakdown_charts(coal, oil, gas, cement, flaring):
     with c1:
         pie = px.pie(df, names="Source", values="Emissions (Mt)", hole=0.35,
                      title="CO₂ Emissions by Source (input mix)")
-        pie.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#fff")
+        pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)")
         st.plotly_chart(pie, use_container_width=True)
     with c2:
         bar = px.bar(df, x="Source", y="Emissions (Mt)", text_auto=True,
                      title="Source Contribution (bar view)")
-        bar.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#fff")
+        bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)")
         st.plotly_chart(bar, use_container_width=True)
 
 def show_continent_stats(df):
@@ -120,7 +163,7 @@ def show_continent_stats(df):
     fig = px.bar(cont, x="continent", y="co2", text_auto=True,
                  title="Total CO₂ Emissions by Continent (2020+)",
                  labels={"continent": "Continent", "co2": "CO₂ Emissions (Mt)"})
-    fig.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#fff")
+    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)")
     st.plotly_chart(fig, use_container_width=True)
 
     needed = {"coal_co2", "oil_co2", "gas_co2", "cement_co2", "flaring_co2"}
@@ -131,15 +174,13 @@ def show_continent_stats(df):
         fig2 = px.bar(bysrc, x="continent", y="Mt", color="Source", barmode="stack",
                       title="CO₂ by Source and Continent (2020+)",
                       labels={"continent": "Continent", "Mt": "CO₂ Emissions (Mt)"})
-        fig2.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#fff")
+        fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)")
         st.plotly_chart(fig2, use_container_width=True)
 
 # =========================
-# Gemini Chatbot (in its own tab)
+# Gemini Chatbot (floating)
 # =========================
-# Your key: we check secrets/env, then fall back to the value you provided.
 def get_gemini_key() -> str:
-    # Load from Streamlit Secrets or Environment variable
     key = st.secrets.get("GEMINI_API_KEY", "")
     if not key:
         key = os.getenv("GEMINI_API_KEY", "")
@@ -150,35 +191,117 @@ def gemini_reply(user_message: str, history: list) -> str:
     if not api_key:
         return "❗ Gemini API key is missing. Please set it in Streamlit Secrets."
 
-    contents = [{"role": m["role"] if m["role"] in ("user","model") else "user",
-                 "parts": [{"text": m["content"]}]} for m in history]
+    contents = []
+    for m in history:
+        role = "user" if m["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": m["content"]}]})
     contents.append({"role": "user", "parts": [{"text": user_message}]})
 
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
     r = requests.post(url, params={"key": api_key},
                       headers={"Content-Type": "application/json"},
                       json={"contents": contents}, timeout=60)
-    r.raise_for_status()
-    data = r.json()
-    return (data.get("candidates", [{}])[0]
-                .get("content", {}).get("parts", [{}])[0].get("text", "")) or "⚠️ No response."
+    try:
+        r.raise_for_status()
+        data = r.json()
+        return (data.get("candidates",[{}])[0]
+                    .get("content",{}).get("parts",[{}])[0].get("text","")) or "No response."
+    except requests.HTTPError as e:
+        return f"HTTP error: {e} — {getattr(e, 'response', None) and e.response.text}"
+    except Exception as e:
+        return f"Error: {e}"
 
-def chatbot_tab():
-    st.markdown('<h2 class="sub-header">💬 Chatbot</h2>', unsafe_allow_html=True)
+def render_floating_chat():
+    if "chat_open" not in st.session_state:
+        st.session_state.chat_open = False
     if "chat" not in st.session_state:
         st.session_state.chat = [{"role": "model",
-                                  "content": "Hi! Ask me about EVs, emissions, charts, or how to use this app."}]
-    for m in st.session_state.chat:
-        st.chat_message("assistant" if m["role"] == "model" else "user").markdown(m["content"])
+                                  "content": "Hi! Ask me about EV benefits, emissions, charts, or how to use this app."}]
 
-    user = st.chat_input("Type your question…")
-    if user:
-        st.session_state.chat.append({"role": "user", "content": user})
-        st.chat_message("user").markdown(user)
-        with st.spinner("Thinking…"):
-            reply = gemini_reply(user, st.session_state.chat)
-        st.session_state.chat.append({"role": "model", "content": reply})
-        st.chat_message("assistant").markdown(reply)
+    # We render HTML buttons and bind them to Streamlit via query params-ish toggles
+    placeholder = st.empty()  # keep a mount point
+
+    # If we can, make the containers actually float
+    if HAVE_FLOAT:
+        float_init()
+
+    # FAB
+    with placeholder.container():
+        st.markdown(
+            f"""
+            <button class="fab" onclick="window.parent.postMessage({{type:'toggle_chat'}}, '*')">💬</button>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # Chat Window (hidden unless open)
+        display = "block" if st.session_state.chat_open else "none"
+        st.markdown(
+            f"""
+            <div class="chat-window" id="chatwin" style="display:{display};">
+              <div class="chat-header">
+                <div class="chat-title">AI Assistant</div>
+                <button class="chat-close" onclick="window.parent.postMessage({{type:'toggle_chat'}}, '*')">✕</button>
+              </div>
+              <div class="chat-body" id="chatbody">
+                {"".join([
+                  f'<div class="bubble {"me" if m["role"]=="user" else "bot"}">{m["content"]}</div>'
+                  for m in st.session_state.chat
+                ])}
+              </div>
+              <div class="chat-input">
+                <input id="chat_input" placeholder="Type your question..." onkeydown="if(event.key==='Enter') window.parent.postMessage({{type:'send_chat'}}, '*')">
+                <button class="chat-send" onclick="window.parent.postMessage({{type:'send_chat'}}, '*')">Send</button>
+              </div>
+            </div>
+            <script>
+              // simple bridge: toggle + send events back to Streamlit via set query params
+              window.addEventListener('message', (e)=>{
+                if(!e.data) return;
+                if(e.data.type==='toggle_chat'){ window.location.hash = (window.location.hash==='#open' ? '' : '#open'); window.parent.postMessage({{type:'rerun'}}, '*'); }
+                if(e.data.type==='send_chat'){ window.location.hash = '#send'; window.parent.postMessage({{type:'rerun'}}, '*'); }
+                if(e.data.type==='rerun'){ setTimeout(()=>{{ window.parent.postMessage({{type:'streamlit:rerun'}}, '*'); }}, 10); }
+              });
+            </script>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # Read hash to toggle / send
+    hash_val = st.experimental_get_query_params().get("_", [""])[0]  # unused; kept to avoid caching
+    # We can inspect st.session_state for a light toggle: we’ll use st.query_params via JS hash
+    # Use the URL fragment accessible via `st.query_params` (Streamlit doesn't expose hash; we emulate via rerun events)
+
+    # Backend toggle using the browser hash content via the special widget below:
+    hash_box = st.text_input("", value="", key="__invisible__", label_visibility="collapsed", help="ignore me")
+    # (This invisible box exists only to trigger reruns on hash change via the JS above.)
+
+    # Process a pseudo-hash by checking the actual JS toggled state we encoded with hash:
+    # Since Streamlit cannot read hash directly, we simply flip state on every rerun if the DOM asked it.
+    # To keep predictable, we store a latch in session_state: when JS posts 'toggle', we flip.
+    if "_pending_toggle" not in st.session_state:
+        st.session_state._pending_toggle = False
+    if "_pending_send" not in st.session_state:
+        st.session_state._pending_send = False
+
+    # Use a small trick: when the hidden input changes (any rerun), check the browser hash by injecting small JS is not supported.
+    # Instead, we expose two buttons that JS "clicks" via postMessage. We've already posted 'rerun' events; here we can't detect them reliably.
+    # So we fall back to explicit Streamlit controls below too:
+    col_a, col_b = st.columns([1,1])
+    with col_a:
+        if st.button("🟡 toggle_chat", key="__toggle__"):
+            st.session_state.chat_open = not st.session_state.chat_open
+    with col_b:
+        # Send message using a Streamlit text_input when chat is open
+        if st.session_state.chat_open:
+            user_msg = st.text_input("Type your message here", key="__chat_msg__", label_visibility="collapsed")
+            if st.button("Send", key="__send__"):
+                if user_msg.strip():
+                    st.session_state.chat.append({"role": "user", "content": user_msg.strip()})
+                    with st.spinner("Thinking…"):
+                        reply = gemini_reply(user_msg.strip(), st.session_state.chat)
+                    st.session_state.chat.append({"role": "model", "content": reply})
+                st.rerun()
 
 # =========================
 # Pages
@@ -188,15 +311,15 @@ def show_landing_page():
     st.markdown(
         '<div class="card" style="text-align:center;">'
         '<p style="font-size:1.1rem;margin:.2rem 0;">'
-        'Understand emissions, explore EV savings, and see continent-level patterns with clean, dark-themed visuals.'
+        'Understand emissions, explore EV savings, and see continent-level patterns with clean, theme-aware visuals.'
         '</p></div>', unsafe_allow_html=True)
 
     st.markdown('<h2 class="sub-header">💡 What you can do here</h2>', unsafe_allow_html=True)
     st.markdown("""
 <div class="card">
   <ul>
-    <li><b>Predict</b> annual CO₂ using macro + energy inputs (with engineered features).</li>
-    <li><b>Compare</b> running costs: EV vs gasoline—see your yearly & 5-year savings.</li>
+    <li><b>Predict</b> annual CO₂ using macro + energy inputs (with engineered features) up to year 2070.</li>
+    <li><b>Compare</b> running costs: EV vs gasoline—see your yearly & 5-year savings with live charts.</li>
     <li><b>Visualize</b> source mix (coal/oil/gas/cement/flaring) with pie + bar charts.</li>
     <li><b>Explore</b> continent rollups and stacked source bars for global context.</li>
   </ul>
@@ -218,7 +341,7 @@ def show_co2_predictor():
 
     st.markdown('<h2 class="sub-header">🔮 CO₂ Predictor</h2>', unsafe_allow_html=True)
 
-    # Country selector (no chatbot here anymore)
+    # Country selector
     st.sidebar.markdown('<h3 class="sub-header">🔧 Input Parameters</h3>', unsafe_allow_html=True)
     if sample is not None and "country" in sample.columns:
         countries = sorted(sample["country"].dropna().unique().tolist())
@@ -282,7 +405,7 @@ def show_co2_predictor():
                     labels={"x": "CO₂ Emissions (Mt)", "y": "Region/Country"},
                     color=recent.values, color_continuous_scale="Reds"
                 )
-                fig.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#fff", height=460)
+                fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)", height=460)
                 st.plotly_chart(fig, use_container_width=True)
 
         except Exception as e:
@@ -290,25 +413,54 @@ def show_co2_predictor():
 
 def show_ev_benefits():
     st.markdown('<h2 class="sub-header">🚗 EV Benefits & Savings</h2>', unsafe_allow_html=True)
+
     c1, c2 = st.columns([1,1])
     with c1:
-        annual_miles = st.number_input("Annual miles driven", 5000, 30000, 12000, 1000)
-        gas_price = st.number_input("Gas price per gallon ($)", 2.0, 10.0, 3.50, 0.10)
-        car_mpg = st.number_input("Your car's MPG", 10, 80, 25, 1)
-        electricity_rate = st.number_input("Electricity rate (¢/kWh)", 4, 60, 12, 1)
+        annual_miles = st.number_input("Annual miles driven", 5000, 40000, 12000, 500)
+        gas_price = st.number_input("Gas price per gallon ($)", 2.0, 12.0, 3.50, 0.10)
+        car_mpg = st.number_input("Your car's MPG (gasoline)", 10, 100, 30, 1)
+        electricity_rate = st.number_input("Electricity rate (¢/kWh)", 4, 80, 12, 1)
+        ev_eff = st.slider("EV efficiency (mi/kWh)", 2.5, 6.0, 3.5, 0.1)
+        maint_gas = st.slider("Yearly maintenance (Gasoline) $", 200, 2000, 900, 50)
+        maint_ev  = st.slider("Yearly maintenance (EV) $", 50, 1500, 400, 50)
+        years = st.slider("Ownership years", 1, 10, 5, 1)
+
     with c2:
         annual_gas_cost = (annual_miles / car_mpg) * gas_price
-        annual_electricity_cost = (annual_miles / 3.5) * (electricity_rate / 100.0)
+        annual_electricity_cost = (annual_miles / ev_eff) * (electricity_rate / 100.0)
         annual_savings = annual_gas_cost - annual_electricity_cost
+
         st.markdown(
             f"""
 <div class="card">
   <h4 class="accent">💰 Your Annual Savings</h4>
-  <p style="font-size:1.2rem;"><b>${annual_savings:,.0f}</b> /year &nbsp;|&nbsp; <b>${annual_savings*5:,.0f}</b> over 5 years</p>
-  <p>Gas: ${annual_gas_cost:,.0f} &nbsp;|&nbsp; Electric: ${annual_electricity_cost:,.0f}</p>
+  <p style="font-size:1.2rem;"><b>${annual_savings:,.0f}</b> /year &nbsp;|&nbsp; <b>${annual_savings*years:,.0f}</b> over {years} years</p>
+  <p>Gas fuel: ${annual_gas_cost:,.0f} &nbsp;|&nbsp; Electric: ${annual_electricity_cost:,.0f}</p>
+  <p>Maintenance (gas): ${maint_gas:,.0f} &nbsp;|&nbsp; Maintenance (EV): ${maint_ev:,.0f}</p>
 </div>""",
             unsafe_allow_html=True,
         )
+
+    # Charts: annual split + cumulative ownership cost
+    c3, c4 = st.columns(2)
+    with c3:
+        pie = px.pie(
+            names=["Gasoline (fuel+maint)", "EV (energy+maint)"],
+            values=[annual_gas_cost + maint_gas, annual_electricity_cost + maint_ev],
+            hole=0.35, title="Annual running cost split"
+        )
+        pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)")
+        st.plotly_chart(pie, use_container_width=True)
+
+    with c4:
+        yrs = np.arange(1, years+1)
+        gas_total = yrs * (annual_gas_cost + maint_gas)
+        ev_total  = yrs * (annual_electricity_cost + maint_ev)
+        df = pd.DataFrame({"Year": yrs, "Gasoline Total ($)": gas_total, "EV Total ($)": ev_total})
+        line = px.line(df, x="Year", y=["Gasoline Total ($)", "EV Total ($)"], markers=True,
+                       title=f"Cumulative cost over {years} years")
+        line.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)")
+        st.plotly_chart(line, use_container_width=True)
 
 def show_environmental_impact():
     st.markdown('<h2 class="sub-header">🌱 Environmental Impact</h2>', unsafe_allow_html=True)
@@ -318,7 +470,7 @@ def show_environmental_impact():
   <ul>
     <li><b>Zero tailpipe emissions</b> ⇒ cleaner city air (NOx/PM).</li>
     <li><b>Grid synergy</b> ⇒ as grids add solar/wind, lifecycle CO₂ declines.</li>
-    <li><b>High efficiency</b> ⇒ electric drivetrains convert ~3× the energy to motion vs ICE.</li>
+    <li><b>High efficiency</b> ⇒ electric drivetrains convert ~3× energy to motion vs ICE.</li>
     <li><b>Noise reduction</b> ⇒ quieter streets at low speeds.</li>
   </ul>
   <div class="pill"></div>
@@ -345,21 +497,23 @@ def show_ev_statistics():
     fig = px.line(x=years, y=global_ev_sales, markers=True,
                   title="Global Electric Vehicle Sales (2015–2023)",
                   labels={"x": "Year", "y": "Sales (Millions)"})
-    fig.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#fff", height=430)
+    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)", height=430)
     st.plotly_chart(fig, use_container_width=True)
 
 def show_main_app():
     st.markdown('<h1 class="main-header">🌍 CO2 Emission Predictor & EV Awareness</h1>', unsafe_allow_html=True)
-    tabs = st.tabs(["🔮 CO₂ Predictor", "🚗 EV Benefits", "🌱 Environmental Impact", "📊 EV Statistics", "💬 Chatbot"])
+    tabs = st.tabs(["🔮 CO₂ Predictor", "🚗 EV Benefits", "🌱 Environmental Impact", "📊 EV Statistics"])
     with tabs[0]: show_co2_predictor()
     with tabs[1]: show_ev_benefits()
     with tabs[2]: show_environmental_impact()
     with tabs[3]: show_ev_statistics()
-    with tabs[4]: chatbot_tab()
 
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("⬅️ Back to Landing Page", key="back", use_container_width=True):
         st.session_state.page = "landing"
+
+    # Floating assistant (always on)
+    render_floating_chat()
 
 # =========================
 # Entrypoint
