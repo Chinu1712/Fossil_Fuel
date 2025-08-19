@@ -135,13 +135,17 @@ def show_continent_stats(df):
         st.plotly_chart(fig2, use_container_width=True)
 
 # =========================
-# Gemini Chatbot (in-app)
+# Gemini Chatbot (in its own tab)
 # =========================
+# Your key: we check secrets/env, then fall back to the value you provided.
+HARDCODED_GEMINI_KEY = "AIzaSyC8k_3PlhGYuHd7z0MXrYgMxhMAU8AEbhU"
+
 def get_gemini_key() -> str:
-    # Prefer Streamlit secrets; fall back to env var
     key = st.secrets.get("GEMINI_API_KEY", "")
     if not key:
         key = os.getenv("GEMINI_API_KEY", "")
+    if not key:
+        key = HARDCODED_GEMINI_KEY  # fallback (you can delete this line later)
     return key
 
 def gemini_reply(user_message: str, history: list) -> str:
@@ -150,7 +154,7 @@ def gemini_reply(user_message: str, history: list) -> str:
     """
     api_key = get_gemini_key()
     if not api_key:
-        return "❗ Gemini API key missing. Add GEMINI_API_KEY in .streamlit/secrets.toml or environment."
+        return "❗ Gemini API key missing."
 
     contents = []
     for m in history:
@@ -234,7 +238,7 @@ def show_co2_predictor():
 
     st.markdown('<h2 class="sub-header">🔮 CO₂ Predictor</h2>', unsafe_allow_html=True)
 
-    # Country selector
+    # Country selector (no chatbot here anymore)
     st.sidebar.markdown('<h3 class="sub-header">🔧 Input Parameters</h3>', unsafe_allow_html=True)
     if sample is not None and "country" in sample.columns:
         countries = sorted(sample["country"].dropna().unique().tolist())
