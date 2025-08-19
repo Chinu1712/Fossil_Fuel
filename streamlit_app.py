@@ -1,18 +1,19 @@
 import warnings
 from pathlib import Path
-import re
-import joblib
+import os
+import requests
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import joblib
 
 warnings.filterwarnings("ignore")
 BASE_DIR = Path(__file__).resolve().parent
 
-# ---------------------------------------------------------
+# =========================
 # Page + Dark theme CSS
-# ---------------------------------------------------------
+# =========================
 st.set_page_config(page_title="CO2 Emission Predictor & EV Awareness", page_icon="🌍", layout="wide")
 st.markdown("""
 <style>
@@ -26,9 +27,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------
+# =========================
 # Loaders
-# ---------------------------------------------------------
+# =========================
 @st.cache_resource
 def load_model():
     try:
@@ -47,9 +48,9 @@ def load_sample_data():
     except Exception:
         return None
 
-# ---------------------------------------------------------
+# =========================
 # Helpers
-# ---------------------------------------------------------
+# =========================
 def prepare_input_data(
     country, year, population, gdp, energy_per_capita,
     primary_energy_consumption, cement_co2, coal_co2, oil_co2,
@@ -69,7 +70,7 @@ def prepare_input_data(
     x["methane"] = methane
     x["nitrous_oxide"] = nitrous_oxide
 
-    # engineered
+    # engineered (match training)
     x["year_sq"] = year**2
     x["year_cub"] = year**3
     x["gdp_per_capita"] = x["gdp"] / max(population, 1)
@@ -84,7 +85,7 @@ def prepare_input_data(
     x["gdp_x_energy"] = x["gdp"] * energy_per_capita
     x["population_x_gdp"] = population * x["gdp"]
 
-    # country one-hot if the feature exists
+    # country one-hot if exists
     cfeat = f"country_{country}"
     if cfeat in x:
         x[cfeat] = 1
@@ -133,49 +134,71 @@ def show_continent_stats(df):
         fig2.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#fff")
         st.plotly_chart(fig2, use_container_width=True)
 
-# ---------------------------------------------------------
-# Chatbot (local keyword-based; no external APIs)
-# ---------------------------------------------------------
-FAQ = [
-    ("ev benefits", "EVs have lower operating costs, zero tailpipe emissions, and fewer moving parts, which reduces maintenance."),
-    ("what does prediction mean", "The model estimates total annual CO₂ emissions (in million tonnes) given your inputs. Per-capita is shown for context."),
-    ("why year to 2070", "Values beyond recent history are extrapolations—use them as scenarios, not certainties."),
-    ("which source contributes most", "Check the Source Breakdown pie/bar—coal and oil are typically dominant where fossil electricity and transport are high."),
-    ("how to reduce emissions", "Electrify transport, add renewables, improve efficiency, and reduce high-carbon fuels like coal and oil."),
-    ("ev vs gas savings", "We compare gasoline cost vs electricity cost using your inputs; typical EV efficiency ~3.5 mi/kWh."),
-    ("data source", "We use OWID CO₂ datasets for charts and trained the model on engineered features derived from them."),
-]
+# =========================
+# Gemini Chatbot (in-app)
+# =========================
+def get_gemini_key() -> str:
+    # Prefer Streamlit secrets; fall back to env var
+    key = st.secrets.get("GEMINI_API_KEY", "")
+    if not key:
+        key = os.getenv("GEMINI_API_KEY", "")
+    return key
 
-def kb_answer(msg: str) -> str:
-    text = re.sub(r"[^a-z0-9\s]", " ", msg.lower())
-    tokens = set(text.split())
-    best, score = None, 0
-    for k, a in FAQ:
-        kt = set(k.split())
-        sc = len(tokens & kt)
-        if sc > score:
-            best, score = a, sc
-    if score == 0:
-        return ("I'm a lightweight helper. Ask me about: EV benefits, prediction meaning, "
-                "sources, savings, or reducing emissions. I don't access the internet.")
-    return best
+def gemini_reply(user_message: str, history: list) -> str:
+    """
+    Calls Gemini 1.5 Flash via REST. History is a list of {"role": "user"|"model", "content": "..."}.
+    """
+    api_key = get_gemini_key()
+    if not api_key:
+        return "❗ Gemini API key missing. Add GEMINI_API_KEY in .streamlit/secrets.toml or environment."
 
-def chat_widget():
-    st.markdown('<h3 class="sub-header">🤖 Ask the Assistant</h3>', unsafe_allow_html=True)
-    if "chat" not in st.session_state: st.session_state.chat = []
-    for who, msg in st.session_state.chat:
-        st.chat_message(who).markdown(msg)
-    user = st.chat_input("Ask something about EVs, emissions, or this app…")
+    contents = []
+    for m in history:
+        role = "user" if m["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": m["content"]}]})
+    contents.append({"role": "user", "parts": [{"text": user_message}]})
+
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    headers = {"Content-Type": "application/json"}
+    params = {"key": api_key}
+    payload = {"contents": contents}
+
+    try:
+        r = requests.post(url, headers=headers, params=params, json=payload, timeout=60)
+        r.raise_for_status()
+        data = r.json()
+        text = (
+            data.get("candidates", [{}])[0]
+                .get("content", {})
+                .get("parts", [{}])[0]
+                .get("text", "")
+        )
+        return text or "I couldn't generate a response."
+    except requests.HTTPError as e:
+        return f"HTTP error from Gemini: {e} — {getattr(e, 'response', None) and e.response.text}"
+    except Exception as e:
+        return f"Error contacting Gemini: {e}"
+
+def chatbot_tab():
+    st.markdown('<h2 class="sub-header">💬 Chatbot</h2>', unsafe_allow_html=True)
+    if "chat" not in st.session_state:
+        st.session_state.chat = [{"role": "model",
+                                  "content": "Hi! Ask me about EVs, emissions, charts, or how to use this app."}]
+    for m in st.session_state.chat:
+        st.chat_message("assistant" if m["role"] == "model" else "user").markdown(m["content"])
+
+    user = st.chat_input("Type your question…")
     if user:
-        st.session_state.chat.append(("user", user))
+        st.session_state.chat.append({"role": "user", "content": user})
         st.chat_message("user").markdown(user)
-        reply = kb_answer(user)
-        st.session_state.chat.append(("assistant", reply))
+        with st.spinner("Thinking…"):
+            reply = gemini_reply(user, st.session_state.chat)
+        st.session_state.chat.append({"role": "model", "content": reply})
         st.chat_message("assistant").markdown(reply)
 
-# ---------------------------------------------------------
+# =========================
 # Pages
-# ---------------------------------------------------------
+# =========================
 def show_landing_page():
     st.markdown('<h1 class="main-header">🌍 CO2 Emission Predictor & EV Awareness</h1>', unsafe_allow_html=True)
     st.markdown(
@@ -211,9 +234,8 @@ def show_co2_predictor():
 
     st.markdown('<h2 class="sub-header">🔮 CO₂ Predictor</h2>', unsafe_allow_html=True)
 
-    # --- Sidebar inputs (added Country) ---
+    # Country selector
     st.sidebar.markdown('<h3 class="sub-header">🔧 Input Parameters</h3>', unsafe_allow_html=True)
-    # country selector: from file or text
     if sample is not None and "country" in sample.columns:
         countries = sorted(sample["country"].dropna().unique().tolist())
         default_idx = countries.index("United States") if "United States" in countries else 0
@@ -252,7 +274,7 @@ def show_co2_predictor():
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.markdown(f"### 🎯 Predicted CO₂ Emissions: **{pred:,.2f} Mt**")
             per_capita_tonnes = (pred * 1e6) / max(population, 1) / 1e3
-            vs_avg_t = 4.8  # rough global per-capita tCO2
+            vs_avg_t = 4.8
             delta = per_capita_tonnes - vs_avg_t
             comp = "above" if delta > 0 else "below"
             st.markdown(f"**Per Capita:** {per_capita_tonnes:,.2f} t/person "
@@ -281,9 +303,6 @@ def show_co2_predictor():
 
         except Exception as e:
             st.error(f"Prediction failed: {e}")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    chat_widget()
 
 def show_ev_benefits():
     st.markdown('<h2 class="sub-header">🚗 EV Benefits & Savings</h2>', unsafe_allow_html=True)
@@ -347,18 +366,20 @@ def show_ev_statistics():
 
 def show_main_app():
     st.markdown('<h1 class="main-header">🌍 CO2 Emission Predictor & EV Awareness</h1>', unsafe_allow_html=True)
-    tabs = st.tabs(["🔮 CO₂ Predictor", "🚗 EV Benefits", "🌱 Environmental Impact", "📊 EV Statistics"])
+    tabs = st.tabs(["🔮 CO₂ Predictor", "🚗 EV Benefits", "🌱 Environmental Impact", "📊 EV Statistics", "💬 Chatbot"])
     with tabs[0]: show_co2_predictor()
     with tabs[1]: show_ev_benefits()
     with tabs[2]: show_environmental_impact()
     with tabs[3]: show_ev_statistics()
+    with tabs[4]: chatbot_tab()
+
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("⬅️ Back to Landing Page", key="back", use_container_width=True):
         st.session_state.page = "landing"
 
-# ---------------------------------------------------------
+# =========================
 # Entrypoint
-# ---------------------------------------------------------
+# =========================
 if "page" not in st.session_state:
     st.session_state.page = "landing"
 
