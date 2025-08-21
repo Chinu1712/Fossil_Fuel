@@ -1,4 +1,4 @@
-# app.py — Fossil Fuel COUNTDOWN (tabs + fixed floating chatbot)
+# app.py — Fossil Fuel COUNTDOWN (tabs + styled Chatbot tab)
 import os
 import warnings
 from pathlib import Path
@@ -77,7 +77,6 @@ st.markdown("""
   --bg:#0a1422; --fg:#e9f4ff; --muted:#93b0c8; --card:#0f2133; --card2:#132941;
   --border:rgba(255,255,255,.10); --accent:#12d7ff; --accent2:#ff2e7e; --lime:#00ffb7;
   --shadow:0 18px 38px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.28);
-  --zchat: 2147483647;
 }
 @media (prefers-color-scheme: light){
   :root{
@@ -118,37 +117,53 @@ html, body, .stApp {
 /* Plotly background */
 .js-plotly-plot .plotly .main-svg { background: transparent !important; }
 
-/* Floating chat FAB and panel */
-#chat_fab {
-  position:fixed; right:22px; bottom:22px; z-index:var(--zchat);
-  width:60px; height:60px; border-radius:16px;
-  display:flex; align-items:center; justify-content:center;
-  background: linear-gradient(145deg, #16c5ff, #ff2e7e); color:#fff; border:none;
-  box-shadow: 0 16px 34px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.2);
-  cursor:pointer; font-size:26px;
+/* Chatbot panel styles (tab) */
+.chatwrap {
+  max-width: 900px;
+  margin: 0 auto;
 }
-#chat_panel {
-  position:fixed; right:22px; bottom:92px; z-index:calc(var(--zchat)-1);
-  width:min(560px, 92vw); max-height:70vh;
-  background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.08));
-  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  border:1px solid rgba(255,255,255,.18); border-radius:20px; overflow:hidden;
-  box-shadow: var(--shadow); display:flex; flex-direction:column;
+.chatcard {
+  background: radial-gradient(180px 120px at 15% 0%, rgba(255,255,255,.08), transparent 40%),
+              linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  padding: 18px 18px 10px;
 }
-.ff_header{ display:flex; align-items:center; justify-content:space-between;
-            padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.16);
-            background: rgba(255,255,255,.05); }
-.ff_title{ font-weight:900; color:#f3f9ff; font-size:1.05rem; }
-.ff_close{ background:transparent; border:none; color:#f3f9ff; font-size:20px; cursor:pointer; }
-
-.ff_body{ padding:14px; overflow:auto; flex:1; min-height:190px; max-height:420px; }
-.bubble{ padding:10px 14px; border-radius:16px; margin:8px 0; width:fit-content; max-width:86%;
-         box-shadow:0 5px 16px rgba(0,0,0,.2); word-wrap:break-word; }
-.me{ background: linear-gradient(145deg, rgba(22,197,255,.9), rgba(22,197,255,.7)); color:#052033; margin-left:auto; font-weight:500; }
-.bot{ background: linear-gradient(145deg, rgba(255,255,255,.25), rgba(255,255,255,.18)); color:#f7fbff; border:1px solid rgba(255,255,255,.15); }
-
-/* keep Streamlit chrome out of the way */
-.stApp > header { background: transparent; }
+.chatstream {
+  max-height: 58vh;
+  overflow-y: auto;
+  padding: 6px 6px 2px;
+}
+.bubble {
+  padding: 12px 16px;
+  border-radius: 18px;
+  margin: 10px 6px;
+  width: fit-content;
+  max-width: 85%;
+  box-shadow: 0 10px 25px rgba(0,0,0,.25);
+  word-wrap: break-word;
+}
+.bubble.user {
+  margin-left: auto;
+  background: linear-gradient(145deg, #1db2ff, #0ea5e9);
+  color: #052033;
+  font-weight: 600;
+}
+.bubble.bot {
+  background: linear-gradient(145deg, rgba(255,255,255,.30), rgba(255,255,255,.18));
+  border: 1px solid rgba(255,255,255,.16);
+  color: #f6fbff;
+}
+.inputbar {
+  display:flex; gap:.6rem; align-items:center; padding: 10px 4px 6px;
+}
+.sendbtn {
+  background: linear-gradient(145deg, #ff7a1a, #ff5252);
+  border: none; color: white; font-weight: 700;
+  padding: 10px 18px; border-radius: 12px; cursor: pointer;
+  box-shadow: 0 10px 20px rgba(0,0,0,.25);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -216,7 +231,7 @@ def source_breakdown_charts(coal, oil, gas, cement, flaring):
         st.plotly_chart(bar, use_container_width=True)
 
 # =========================
-# GEMINI (REST) — use Secrets env
+# GEMINI (REST) — use Secrets/env
 # =========================
 def _get_gemini_key()->str:
     key = st.secrets.get("GEMINI_API_KEY","")
@@ -228,11 +243,10 @@ def _gemini_reply(user_message:str, history:list)->str:
     if not key:
         return "❗ Gemini API key is missing. Add GEMINI_API_KEY in Streamlit Secrets."
 
-    # prepend identity shortcut
+    # identity quick answer
     if user_message.strip().lower() in {"who are you","who are you?","who r u","who r u?"}:
         return "I'm a chatbot here to assist you with the Fossil Fuel Countdown project — ask me anything about the experience, EVs, emissions, or what the charts mean."
 
-    # Build contents with context + turns
     preface = {"role":"user","parts":[{"text":PROJECT_CONTEXT}]}
     contents=[preface]
     for m in history:
@@ -253,69 +267,8 @@ def _gemini_reply(user_message:str, history:list)->str:
         return f"Error: {e}"
 
 # =========================
-# FLOATING CHAT — OPEN/CLOSE via GET forms (no new tab)
-# =========================
-def render_floating_chat():
-    """
-    Floating chatbot that:
-      - Opens/closes using HTML GET forms (same tab, no new tab).
-      - Uses st.chat_input for messages.
-      - Keeps state in st.session_state.chat and a ?open=1 query param.
-    """
-    # init history
-    if "chat" not in st.session_state:
-        st.session_state.chat = [
-            {"role":"model",
-             "content":"Hi! I’m a chatbot here to assist you about the Fossil Fuel Countdown project. "
-                       "Ask me anything about EVs, emissions, or what the charts mean."}
-        ]
-
-    open_flag = st.query_params.get("open") == "1"
-
-    # OPEN FAB — GET form so it stays in same tab
-    st.markdown("""
-    <form method="get" style="position:fixed; right:22px; bottom:22px; z-index:2147483647;">
-      <input type="hidden" name="open" value="1"/>
-      <button id="chat_fab" type="submit" title="Open chat">💬</button>
-    </form>
-    """, unsafe_allow_html=True)
-
-    if open_flag:
-        # Panel header with CLOSE form
-        st.markdown("""
-        <div id="chat_panel" role="dialog" aria-modal="true" aria-label="Fossil Fuel Chat">
-          <div class="ff_header">
-            <div class="ff_title">Fossil Fuel Chat</div>
-            <form method="get" style="margin:0;">
-              <input type="hidden" name="open" value="0"/>
-              <button class="ff_close" type="submit" title="Close">✕</button>
-            </form>
-          </div>
-          <div class="ff_body">
-        """, unsafe_allow_html=True)
-
-        # Render messages
-        def esc(s:str)->str:
-            return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
-        for m in st.session_state.chat:
-            cls = "me" if m["role"]=="user" else "bot"
-            st.markdown(f'<div class="bubble {cls}">{esc(m["content"])}</div>', unsafe_allow_html=True)
-
-        # Input (keeps panel open)
-        prompt = st.chat_input("Ask about fossil fuels, EVs, or CO₂…")
-        if prompt:
-            st.session_state.chat.append({"role":"user","content":prompt})
-            reply = _gemini_reply(prompt, st.session_state.chat[:-1])
-            st.session_state.chat.append({"role":"model","content":reply})
-            st.query_params["open"] = "1"  # keep the panel open after sending
-            st.rerun()
-
-        st.markdown("</div></div>", unsafe_allow_html=True)
-
-# =========================
 # MAIN APP CONTENT
 # =========================
-# Header
 st.markdown("""
 <div class="header-wrap">
   <div class="title">Fossil Fuel COUNTDOWN</div>
@@ -323,8 +276,13 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Tabs
-tabs = st.tabs(["🔮 CO₂ Predictor", "🚗 EV Benefits", "🌱 Environmental Impact", "📊 EV Statistics"])
+tabs = st.tabs([
+    "🔮 CO₂ Predictor",
+    "🚗 EV Benefits",
+    "🌱 Environmental Impact",
+    "📊 EV Statistics",
+    "💬 Chatbot"
+])
 
 # ============ CO₂ Predictor ============
 with tabs[0]:
@@ -454,5 +412,46 @@ with tabs[3]:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=420)
     st.plotly_chart(fig, use_container_width=True)
 
-# === Floating chatbot on all pages ===
-render_floating_chat()
+# ============ 💬 Chatbot (tab) ============
+with tabs[4]:
+    # init chat history
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = [
+            {"role":"model",
+             "content":"Hi there! I'm ready to answer any questions you have about the "
+                       '"Fossil Fuel Countdown: The Race to EV & Renewables" project. '
+                       "What would you like to know?"}
+        ]
+
+    st.markdown('<div class="chatwrap"><div class="chatcard">', unsafe_allow_html=True)
+    st.markdown('<div class="chatstream">', unsafe_allow_html=True)
+
+    # render messages
+    def esc(s:str)->str:
+        return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+
+    for m in st.session_state.chat_messages:
+        cls = "user" if m["role"]=="user" else "bot"
+        st.markdown(f'<div class="bubble {cls}">{esc(m["content"])}</div>', unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)  # end chatstream
+
+    # input row (form prevents accidental double-sends)
+    with st.form("chat_send_form", clear_on_submit=True):
+        cols = st.columns([6,1])
+        with cols[0]:
+            user_text = st.text_input("Ask about fossil fuels, EVs, or CO₂…",
+                                      label_visibility="collapsed",
+                                      placeholder="Ask me about EVs, emissions, charts, or how to use this app…")
+        with cols[1]:
+            sent = st.form_submit_button("Send", use_container_width=True)
+        if sent and user_text.strip():
+            st.session_state.chat_messages.append({"role":"user","content":user_text.strip()})
+            try:
+                reply = _gemini_reply(user_text.strip(), st.session_state.chat_messages[:-1])
+            except Exception as e:
+                reply = f"Sorry, I hit an error: {e}"
+            st.session_state.chat_messages.append({"role":"model","content":reply})
+            st.experimental_rerun()
+
+    st.markdown('</div></div>', unsafe_allow_html=True)
