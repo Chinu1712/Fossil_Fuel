@@ -11,7 +11,8 @@ import requests
 import streamlit as st
 
 warnings.filterwarnings("ignore")
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(os.path.abspath(__file__)).parent if "__file__" in globals() else Path.cwd()
+
 
 PROJECT_CONTEXT = """
 You are a chatbot designed to answer questions about the "Fossil Fuel Countdown: The Race to EV & Renewables" project.
