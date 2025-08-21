@@ -11,14 +11,14 @@ import requests
 import streamlit as st
 
 warnings.filterwarnings("ignore")
-BASE_DIR = Path(_file_).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent
 
 PROJECT_CONTEXT = """
 You are a chatbot designed to answer questions about the "Fossil Fuel Countdown: The Race to EV & Renewables" project.
 Identity (for “who are you?”): "I'm a chatbot here to assist you with the Fossil Fuel Countdown project — ask me anything about the experience, EVs, emissions, or what the charts mean."
 """
 
-st.set_page_config(page_title="Fossil Fuel COUNTDOWN", page_icon="🛢", layout="wide")
+st.set_page_config(page_title="Fossil Fuel COUNTDOWN", page_icon="🛢️", layout="wide")
 
 # ---------- THEME & CHATBOT UI (flatten inputs) ----------
 st.markdown("""
@@ -155,7 +155,7 @@ def prepare_input_data(country, year, population, gdp, energy_per_capita,
     x["cement_co2"]=cement_co2; x["coal_co2"]=coal_co2; x["oil_co2"]=oil_co2
     x["gas_co2"]=gas_co2; x["flaring_co2"]=flaring_co2
     x["methane"]=methane; x["nitrous_oxide"]=nitrous_oxide
-    x["year_sq"]=year*2; x["year_cub"]=year*3
+    x["year_sq"]=year**2; x["year_cub"]=year**3
     x["gdp_per_capita"]=x["gdp"]/max(population,1)
     x["energy_per_capita_log"]=np.log1p(energy_per_capita)
     x["population_log"]=np.log1p(population); x["gdp_log"]=np.log1p(x["gdp"])
@@ -242,11 +242,11 @@ with tabs[0]:
 
     year=st.sidebar.slider("Year", 1990, 2070, 2023, 1)
 
-    st.sidebar.markdown("*Population & GDP*")
+    st.sidebar.markdown("**Population & GDP**")
     population=st.sidebar.number_input("Population", min_value=1, value=330_000_000, step=1_000_000)
     gdp=st.sidebar.number_input("GDP (billion USD)", 0.0, 40_000.0, 25_000.0, 100.0)
 
-    st.sidebar.markdown("*Energy & Sources*")
+    st.sidebar.markdown("**Energy & Sources**")
     energy_per_capita=st.sidebar.number_input("Energy per Capita (kWh)", 0.0, 100_000.0, 12_000.0, 100.0)
     primary_energy=st.sidebar.number_input("Primary Energy (TWh)", 0.0, 20_000.0, 2_500.0, 10.0)
     cement=st.sidebar.number_input("Cement CO₂ (Mt)", 0.0, 2_000.0, 50.0, 1.0)
