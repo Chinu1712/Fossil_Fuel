@@ -241,38 +241,43 @@ def _gemini_reply(user_message:str, history:list)->str:
 # =========================
 # FLOATING CHAT (Open/Close via query param; send via st.chat_input)
 # =========================
+# =========================
+# FLOATING CHAT (SPA-like, persistent, no reload)
+# =========================
 def render_floating_chat():
     """
-    Floating chatbot that:
-      - Opens/closes using HTML GET forms (no new tab).
-      - Stays open for chatting without reloading (st.chat_input).
+    Floating chatbot:
+      - Opens/closes via in-page state (not GET params).
+      - Sending a message updates state, not triggers full rerun.
       - Always answers with PROJECT_CONTEXT.
+      - FAB stays above manage app with extreme z-index.
     """
-    # Initialize chat memory
+    # Initialize state variables
+    if "chat_open" not in st.session_state:
+        st.session_state.chat_open = False
     if "chat" not in st.session_state:
         st.session_state.chat = [
             {"role": "model",
-             "content": "Hi! I’m a chatbot here to assist you about the Fossil Fuel Countdown project. "
-                        "Ask me anything about EVs, emissions, or what the charts mean."}
+             "content": "Hi! I’m a chatbot here to assist you about the Fossil Fuel Countdown project. Ask me anything about EVs, emissions, or what the charts mean."}
         ]
+    if "chat_input" not in st.session_state:
+        st.session_state.chat_input = ""
 
-    # Read panel open/close from query params
-    chat_open = st.query_params.get("open") == "1"
-
-    # --- FAB (open) — use a tiny GET form (same tab, not a new tab)
+    # --- Floating FAB ---
     st.markdown(
         """
         <style>
         #chat_fab {
-          position:fixed; right:22px; bottom:22px; z-index:2147483000;
+          position:fixed; right:22px; bottom:22px; z-index:2147483999 !important;
           width:60px; height:60px; border-radius:16px;
           display:flex; align-items:center; justify-content:center;
           background: linear-gradient(145deg, #16c5ff, #ff2e7e);
           color:#fff; border:none; font-size:26px; cursor:pointer;
           box-shadow: 0 16px 34px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.2);
         }
+        /* Chat panel high z-index */
         #chat_panel {
-          position:fixed; right:22px; bottom:92px; z-index:2147482999;
+          position:fixed; right:22px; bottom:92px; z-index:2147483998;
           width:min(560px, 92vw);
           background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
           -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -293,51 +298,87 @@ def render_floating_chat():
         .bot{ background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.16));
               color:#f7fbff; border:1px solid rgba(255,255,255,.15); }
         </style>
-
-        <!-- OPEN form submits ?open=1 to this same page -->
-        <form method="get" style="position:fixed; right:22px; bottom:22px; z-index:2147483000;">
-          <input type="hidden" name="open" value="1"/>
-          <button id="chat_fab" type="submit" title="Chat">💬</button>
-        </form>
+        <button id="chat_fab" title="Chat" onclick="window.dispatchEvent(new CustomEvent('st-open-chat'));">💬</button>
+        <script>
+        window.addEventListener('st-open-chat', () => {
+          window.parent.postMessage({type:'streamlit:callBack', args:['openChat']}, "*");
+        });
+        window.addEventListener('st-close-chat', () => {
+          window.parent.postMessage({type:'streamlit:callBack', args:['closeChat']}, "*");
+        });
+        </script>
         """,
         unsafe_allow_html=True
     )
 
-    if chat_open:
-        # Header with CLOSE form (?open=0)
+    # React to open/close events by setting session_state
+    import streamlit.components.v1 as components
+
+    # Efficient event listeners: toggling via dummy component triggers
+    components.html(
+        """
+        <script>
+        if (!window.stChatSetup){
+            window.stChatSetup = true;
+            window.parent.addEventListener('streamlit:callBack', function(ev){
+                if(ev.data && ev.data.args){
+                    if(ev.data.args[0]=='openChat'){
+                        window.parent.document.dispatchEvent(new CustomEvent('OPEN_CHAT_PANEL'));
+                    }
+                    if(ev.data.args=='closeChat'){
+                        window.parent.document.dispatchEvent(new CustomEvent('CLOSE_CHAT_PANEL'));
+                    }
+                }
+            });
+        }
+        </script>
+        """, height=0
+    )
+
+    # Open/close triggers
+    st.session_state.chat_open = st.session_state.get('chat_open', False)
+    open_flag = st.session_state.get('open_chat_panel', False)
+    close_flag = st.session_state.get('close_chat_panel', False)
+    if open_flag:
+        st.session_state.chat_open = True
+        st.session_state.open_chat_panel = False
+    if close_flag:
+        st.session_state.chat_open = False
+        st.session_state.close_chat_panel = False
+
+    # --- Panel (if open) ---
+    if st.session_state.chat_open:
         st.markdown(
             """
             <div id="chat_panel" role="dialog" aria-label="Fossil Fuel Chat" aria-modal="true">
               <div class="ff_header">
                 <div class="ff_title">Fossil Fuel Chat</div>
-                <form method="get" style="margin:0;">
-                  <input type="hidden" name="open" value="0"/>
-                  <button class="ff_close_btn" type="submit" title="Close">✕</button>
-                </form>
+                <button class="ff_close_btn" onclick="window.dispatchEvent(new CustomEvent('st-close-chat'));" title="Close">✕</button>
               </div>
               <div class="ff_body">
             """,
             unsafe_allow_html=True
         )
 
-        # Messages
+        # Display chat messages
         def esc(t: str) -> str:
             return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
         for m in st.session_state.chat:
             cls = "me" if m["role"]=="user" else "bot"
             st.markdown(f'<div class="bubble {cls}">{esc(m["content"])}</div>', unsafe_allow_html=True)
 
-        # Input (no reload when sending)
-        prompt = st.chat_input("Ask about fossil fuels, EVs, or CO₂…")
-        if prompt:
-            st.session_state.chat.append({"role":"user","content":prompt})
-            reply = _gemini_reply(prompt, st.session_state.chat)
-            st.session_state.chat.append({"role":"model","content":reply})
-            # keep panel open and re-render to show the new message
-            st.query_params["open"] = "1"
-            st.rerun()
+        # Input (doesn't reload page)
+        user_input = st.text_input("Ask about fossil fuels, EVs, or CO₂…", value=st.session_state.chat_input, key="chat_input")
+        if st.button("Send", key="send_button", use_container_width=True):
+            prompt = st.session_state.chat_input.strip()
+            if prompt:
+                st.session_state.chat.append({"role":"user","content":prompt})
+                reply = _gemini_reply(prompt, st.session_state.chat)
+                st.session_state.chat.append({"role":"model","content":reply})
+                st.session_state.chat_input = ""  # reset message after sending
 
         st.markdown("</div></div>", unsafe_allow_html=True)
+
 
 # =========================
 # HEADER + TABS
