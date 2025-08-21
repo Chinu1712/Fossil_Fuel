@@ -242,47 +242,98 @@ def _gemini_reply(user_message:str, history:list)->str:
 # FLOATING CHAT (Open/Close via query param; send via st.chat_input)
 # =========================
 def render_floating_chat():
-    # session state
+    """
+    Floating chatbot that:
+      - Opens/closes using HTML GET forms (no new tab).
+      - Stays open for chatting without reloading (st.chat_input).
+      - Always answers with PROJECT_CONTEXT.
+    """
+    # Initialize chat memory
     if "chat" not in st.session_state:
         st.session_state.chat = [
-            {"role": "model", "content": "Hi! I’m a chatbot here to assist you about the Fossil Fuel Countdown project. Ask anything about EVs, emissions, or the charts."}
+            {"role": "model",
+             "content": "Hi! I’m a chatbot here to assist you about the Fossil Fuel Countdown project. "
+                        "Ask me anything about EVs, emissions, or what the charts mean."}
         ]
 
-    # open/close from query params (open=1 keeps it open)
+    # Read panel open/close from query params
     chat_open = st.query_params.get("open") == "1"
 
-    # FAB (link toggles open=1)
+    # --- FAB (open) — use a tiny GET form (same tab, not a new tab)
     st.markdown(
-        '<a id="chat_fab" href="?open=1" title="Chat">💬</a>',
+        """
+        <style>
+        #chat_fab {
+          position:fixed; right:22px; bottom:22px; z-index:2147483000;
+          width:60px; height:60px; border-radius:16px;
+          display:flex; align-items:center; justify-content:center;
+          background: linear-gradient(145deg, #16c5ff, #ff2e7e);
+          color:#fff; border:none; font-size:26px; cursor:pointer;
+          box-shadow: 0 16px 34px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.2);
+        }
+        #chat_panel {
+          position:fixed; right:22px; bottom:92px; z-index:2147482999;
+          width:min(560px, 92vw);
+          background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+          -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+          border:1px solid rgba(255,255,255,.16); border-radius:20px; overflow:hidden;
+          box-shadow: 0 18px 38px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.28);
+        }
+        .ff_header{ display:flex; align-items:center; justify-content:space-between;
+                    padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.14); }
+        .ff_title{ font-weight:900; color:#f3f9ff; }
+        .ff_close_btn{
+          background:transparent; border:none; color:#f3f9ff; font-size:20px; cursor:pointer; opacity:.9;
+        }
+        .ff_body{ padding:14px; overflow:auto; max-height:56vh; }
+        .bubble{ padding:.7rem .9rem; border-radius:16px; margin:.45rem 0; width:fit-content; max-width:86%;
+                 box-shadow:0 5px 16px rgba(0,0,0,.2); }
+        .me{ background: linear-gradient(145deg, rgba(22,197,255,.85), rgba(22,197,255,.55));
+             color:#052033; margin-left:auto; }
+        .bot{ background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.16));
+              color:#f7fbff; border:1px solid rgba(255,255,255,.15); }
+        </style>
+
+        <!-- OPEN form submits ?open=1 to this same page -->
+        <form method="get" style="position:fixed; right:22px; bottom:22px; z-index:2147483000;">
+          <input type="hidden" name="open" value="1"/>
+          <button id="chat_fab" type="submit" title="Chat">💬</button>
+        </form>
+        """,
         unsafe_allow_html=True
     )
 
-    # Panel
     if chat_open:
-        # header + close (link sets open=0)
-        st.markdown("""
-<div id="chat_panel" role="dialog" aria-label="Fossil Fuel Chat" aria-modal="true">
-  <div class="ff_header">
-    <div class="ff_title">Fossil Fuel Chat</div>
-    <a class="ff_close" href="?open=0" title="Close">✕</a>
-  </div>
-  <div class="ff_body">
-""", unsafe_allow_html=True)
+        # Header with CLOSE form (?open=0)
+        st.markdown(
+            """
+            <div id="chat_panel" role="dialog" aria-label="Fossil Fuel Chat" aria-modal="true">
+              <div class="ff_header">
+                <div class="ff_title">Fossil Fuel Chat</div>
+                <form method="get" style="margin:0;">
+                  <input type="hidden" name="open" value="0"/>
+                  <button class="ff_close_btn" type="submit" title="Close">✕</button>
+                </form>
+              </div>
+              <div class="ff_body">
+            """,
+            unsafe_allow_html=True
+        )
 
-        # message bubbles
+        # Messages
         def esc(t: str) -> str:
             return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
         for m in st.session_state.chat:
             cls = "me" if m["role"]=="user" else "bot"
             st.markdown(f'<div class="bubble {cls}">{esc(m["content"])}</div>', unsafe_allow_html=True)
 
-        # chat input (no page reload)
+        # Input (no reload when sending)
         prompt = st.chat_input("Ask about fossil fuels, EVs, or CO₂…")
         if prompt:
             st.session_state.chat.append({"role":"user","content":prompt})
             reply = _gemini_reply(prompt, st.session_state.chat)
             st.session_state.chat.append({"role":"model","content":reply})
-            # Rerun to show new message without closing panel
+            # keep panel open and re-render to show the new message
             st.query_params["open"] = "1"
             st.rerun()
 
