@@ -221,130 +221,114 @@ def _gemini_reply(user_message:str, history:list)->str:
         return f"Error: {e}"
 
 def render_floating_chat():
-    """Floating button + modal chat. No f-strings inside HTML/JS to avoid brace issues."""
+    """
+    Floating chat using ONLY HTML+CSS (no JS), so it works in Streamlit.
+    The Send button posts via GET (?chatq=...&open=1). We read that above
+    and add model/user turns accordingly.
+    """
+    # Ensure chat state exists
     if "chat" not in st.session_state:
         st.session_state.chat = [
             {"role": "model", "content": "Hi! Ask me about fossil fuels, EVs, or CO₂."}
         ]
 
-    # Handle message from query param (?chatq=...) so Send works
+    # Consume query params (done on each run)
     qp = dict(st.query_params)
-    msg = qp.get("chatq")
+    msg = (qp.get("chatq") or "").strip()
     if msg:
-        msg = msg.strip()
-        if msg:
-            st.session_state.chat.append({"role": "user", "content": msg})
-            reply = _gemini_reply(msg, st.session_state.chat)
-            st.session_state.chat.append({"role": "model", "content": reply})
-        # Keep the panel open and clear chatq
+        st.session_state.chat.append({"role": "user", "content": msg})
+        reply = _gemini_reply(msg, st.session_state.chat)
+        st.session_state.chat.append({"role": "model", "content": reply})
+        # keep open after reload
         st.query_params["open"] = "1"
+        # clear the text so it doesn't resend on next run
         if "chatq" in st.query_params:
             del st.query_params["chatq"]
 
     # Build bubbles safely
     def esc(t: str) -> str:
         return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
     bubbles = "".join(
-        [
-            '<div class="bubble {cls}">{txt}</div>'.format(
-                cls=("me" if m["role"] == "user" else "bot"), txt=esc(m["content"])
-            )
-            for m in st.session_state.chat
-        ]
+        '<div class="bubble {cls}">{txt}</div>'.format(
+            cls=("me" if m["role"] == "user" else "bot"), txt=esc(m["content"])
+        )
+        for m in st.session_state.chat
     )
 
-    # Plain triple-quoted string (NOT an f-string). We inject bubbles via placeholder.
-    html = """
-<button id="ff_fab" title="Ask">💬</button>
+    # open=1 -> checkbox "checked" (no JS needed)
+    checked_attr = " checked" if (st.query_params.get("open") == "1") else ""
 
-<div id="ff_chat">
+    html = f"""
+<style>
+/* Float container uses only CSS */
+#ff_toggle {{ display:none; }}
+#ff_fab {{
+  position:fixed; right:22px; bottom:22px; z-index:2147483000;
+  width:60px; height:60px; border-radius:16px; display:flex; align-items:center; justify-content:center;
+  background: linear-gradient(145deg, #16c5ff, #ff2e7e); color:#fff; border:none;
+  box-shadow: 0 16px 34px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.2); cursor:pointer; font-size:26px;
+}}
+#ff_chat {{
+  position:fixed; right:22px; bottom:92px; z-index:2147482999;
+  width:min(560px, 92vw);
+  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border:1px solid rgba(255,255,255,.16); border-radius:20px; overflow:hidden; display:none;
+  box-shadow: 0 18px 38px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.28);
+}}
+/* Toggle open/close with the hidden checkbox */
+#ff_toggle:checked ~ #ff_chat {{ display:block; }}
+
+.ff_header{{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.14); }}
+.ff_title{{ font-weight:900; color:#f3f9ff; }}
+.ff_close{{ cursor:pointer; color:#f3f9ff; background:transparent; border:none; font-size:20px; opacity:.85; }}
+
+.ff_body{{ padding:14px; overflow:auto; max-height:56vh; }}
+.bubble{{ padding:.7rem .9rem; border-radius:16px; margin:.45rem 0; width:fit-content; max-width:86%; box-shadow:0 5px 16px rgba(0,0,0,.2); }}
+.me{{ background: linear-gradient(145deg, rgba(22,197,255,.85), rgba(22,197,255,.55)); color:#052033; margin-left:auto; }}
+.bot{{ background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.16)); color:#f7fbff; border:1px solid rgba(255,255,255,.15); }}
+
+.ff_input{{ display:flex; gap:.6rem; padding:12px; border-top:1px solid rgba(255,255,255,.14); background:rgba(0,0,0,.06); }}
+.ff_input textarea{{
+  flex:1; border:1px solid rgba(255,255,255,.22); border-radius:14px; padding:.6rem .75rem;
+  background: rgba(255,255,255,.08); color:inherit; height:64px; resize:vertical;
+}}
+.ff_send{{
+  border:none; border-radius:14px; padding:.6rem 1rem; font-weight:700; color:#0b1b2b;
+  background:linear-gradient(90deg, #00ffd0, #12d7ff); cursor:pointer; box-shadow:0 10px 20px rgba(0,0,0,.25);
+}}
+/* Light theme readability */
+@media (prefers-color-scheme: light){{
+  .bot{{ color:#0b1b2b; }}
+}}
+</style>
+
+<!-- Hidden checkbox controls visibility -->
+<input type="checkbox" id="ff_toggle"{checked_attr} />
+
+<!-- Floating button toggles the checkbox -->
+<label id="ff_fab" for="ff_toggle" title="Chat">💬</label>
+
+<!-- Chat box -->
+<div id="ff_chat" role="dialog" aria-label="Fossil Fuel Chat" aria-modal="true">
   <div class="ff_header">
     <div class="ff_title">Fossil Fuel Chat</div>
-    <button class="ff_close" id="ff_close">✕</button>
+    <!-- Clicking this label unchecks the checkbox -->
+    <label class="ff_close" for="ff_toggle" title="Close">✕</label>
   </div>
-  <div class="ff_body" id="ff_body">%%BUBBLES%%</div>
-  <div class="ff_input">
-    <textarea id="ff_input" placeholder="Ask me about fossil fuels, EVs, or CO₂!"></textarea>
-    <button class="ff_send" id="ff_send">Send</button>
-  </div>
+
+  <div class="ff_body">{bubbles}</div>
+
+  <!-- GET form reloads the page with ?chatq=...&open=1 -->
+  <form class="ff_input" method="get">
+    <textarea name="chatq" placeholder="Ask me about fossil fuels, EVs, or CO₂!"></textarea>
+    <input type="hidden" name="open" value="1" />
+    <button class="ff_send" type="submit">Send</button>
+  </form>
 </div>
-
-<script>
-(function(){
-  const fab = document.getElementById("ff_fab");
-  const box = document.getElementById("ff_chat");
-  const closeBtn = document.getElementById("ff_close");
-  const sendBtn = document.getElementById("ff_send");
-  const input = document.getElementById("ff_input");
-  const body = document.getElementById("ff_body");
-
-  function openBox(){
-    if(!box) return;
-    box.style.display = "block";
-    setTimeout(function(){
-      if(body) body.scrollTop = body.scrollHeight;
-    }, 50);
-  }
-  function closeBox(){
-    if(!box) return;
-    box.style.display = "none";
-  }
-
-  // Restore open state if ?open=1
-  try {
-    const sp = new URLSearchParams(window.location.search);
-    if (sp.get("open") === "1") openBox();
-  } catch(e) {}
-
-  if (fab) fab.onclick = function(){
-    if (box.style.display === "block"){
-      closeBox();
-      try {
-        const u = new URL(window.location.href);
-        u.searchParams.delete("open");
-        window.history.replaceState({}, "", u.toString());
-      } catch(e) {}
-    } else {
-      openBox();
-      try {
-        const u = new URL(window.location.href);
-        u.searchParams.set("open", "1");
-        window.history.replaceState({}, "", u.toString());
-      } catch(e) {}
-    }
-  };
-
-  if (closeBtn) closeBtn.onclick = function(){
-    closeBox();
-    try {
-      const u = new URL(window.location.href);
-      u.searchParams.delete("open");
-      window.history.replaceState({}, "", u.toString());
-    } catch(e) {}
-  };
-
-  function send(){
-    const val = (input && input.value || "").trim();
-    if (!val) return;
-    try {
-      const u = new URL(window.location.href);
-      u.searchParams.set("chatq", val);
-      u.searchParams.set("open", "1");   // keep panel open after reload
-      window.location.href = u.toString();
-    } catch(e) {}
-  }
-  if (sendBtn) sendBtn.onclick = send;
-  if (input) input.addEventListener("keydown", function(ev){
-    if (ev.key === "Enter" && !ev.shiftKey){
-      ev.preventDefault();
-      send();
-    }
-  });
-})();
-</script>
 """
-    st.markdown(html.replace("%%BUBBLES%%", bubbles), unsafe_allow_html=True)
+    st.markdown(html, unsafe_allow_html=True)
+
 
 # =========================
 # HEADER + TABS
