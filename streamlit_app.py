@@ -1,4 +1,4 @@
-# app.py — Fossil Fuel COUNTDOWN (tabs + styled Chatbot tab, continents, extra post-prediction charts)
+# app.py — Fossil Fuel COUNTDOWN (no rounded pill, no continents)
 import os
 import warnings
 from pathlib import Path
@@ -13,33 +13,14 @@ import streamlit as st
 warnings.filterwarnings("ignore")
 BASE_DIR = Path(__file__).resolve().parent
 
-# =========================
-# PROJECT CONTEXT (chatbot uses this)
-# =========================
 PROJECT_CONTEXT = """
 You are a chatbot designed to answer questions about the "Fossil Fuel Countdown: The Race to EV & Renewables" project.
-This project is an interactive dashboard that shows how fast our petrol and diesel reserves are running out and how much we can extend the timeline by switching to EVs and renewable sources today.
-
-Key Objectives:
-- Create curiosity: Show how limited fossil fuel reserves are.
-- Educate: Demonstrate the impact of daily fuel consumption on depletion timelines.
-- Inspire: Visualize how EV adoption and renewable integration delay extinction of reserves.
-- Engage: Let visitors simulate their own "switch scenarios" and see instant results.
-
-What the Dashboard Shows:
-- Country view + charts of reserves/emissions.
-- Countdown idea for depletion; sliders for EV/renewables scenarios.
-- Before/after curves and CO₂ savings equivalents.
-
-Identity (for “who are you?”):
-"I'm a chatbot here to assist you with the Fossil Fuel Countdown project — ask me anything about the experience, EVs, emissions, or what the charts mean."
+Identity (for “who are you?”): "I'm a chatbot here to assist you with the Fossil Fuel Countdown project — ask me anything about the experience, EVs, emissions, or what the charts mean."
 """
 
-# =========================
-# PAGE CONFIG + THEME
-# =========================
 st.set_page_config(page_title="Fossil Fuel COUNTDOWN", page_icon="🛢️", layout="wide")
 
+# ---------- THEME & CHATBOT UI (flatten inputs) ----------
 st.markdown("""
 <style>
 :root{
@@ -80,42 +61,50 @@ html, body, .stApp {
 .kpi .big { font-size: 1.2rem; font-weight: 900; letter-spacing:.02em; color:#ffb703; text-shadow:0 0 10px rgba(255,183,3,.35); }
 .kpi small { color: var(--muted); }
 
-/* Plotly background */
+/* Plotly */
 .js-plotly-plot .plotly .main-svg { background: transparent !important; }
 
-/* Chatbot (tab) */
+/* Chatbot (flatten inputs/buttons) */
 .chatwrap { max-width: 900px; margin: 0 auto; }
 .chatcard {
   background: radial-gradient(200px 140px at 15% 0%, rgba(255,255,255,.08), transparent 42%),
               linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
   border: 1px solid rgba(255,255,255,.18);
-  border-radius: 22px; box-shadow: var(--shadow);
+  border-radius: 18px; box-shadow: var(--shadow);
   padding: 18px 18px 12px;
 }
 .chatstream { max-height: 58vh; overflow-y: auto; padding: 6px 6px 2px; }
 .bubble {
-  padding: 12px 16px; border-radius: 18px; margin: 10px 6px; width: fit-content; max-width: 85%;
+  padding: 12px 16px; border-radius: 14px; margin: 10px 6px; width: fit-content; max-width: 85%;
   box-shadow: 0 10px 25px rgba(0,0,0,.25); word-wrap: break-word;
 }
 .bubble.user { margin-left: auto; background: linear-gradient(145deg, #1db2ff, #0ea5e9); color: #052033; font-weight: 600; }
 .bubble.bot  { background: linear-gradient(145deg, rgba(255,255,255,.30), rgba(255,255,255,.18));
                border: 1px solid rgba(255,255,255,.16); color: #f6fbff; }
 
-/* Input row (square textbox + gradient button) */
-.chatwrap .sendbtn [data-testid="baseButton-secondary"],
+/* == This kills the "pill" look == */
+/* Input field (outer container) */
+.chatwrap .stTextInput > div > div { border-radius: 6px !important; }
+/* Actual <input> */
+.chatwrap .stTextInput input {
+  border-radius: 6px !important;
+  background: rgba(255,255,255,.08) !important;
+  border: 1px solid rgba(255,255,255,.25) !important;
+  box-shadow: none !important;
+}
+/* Send button */
+.chatwrap .sendbtn button,
 .chatwrap .sendbtn [data-testid="baseButton-primary"],
-.chatwrap .sendbtn button {
+.chatwrap .sendbtn [data-testid="baseButton-secondary"] {
   background: linear-gradient(145deg, #ff7a1a, #ff5252) !important;
   border: none !important; color: white !important; font-weight: 800 !important;
-  border-radius: 10px !important; height: 44px !important;
+  border-radius: 6px !important; height: 44px !important;
   box-shadow: 0 10px 20px rgba(0,0,0,.25) !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# =========================
-# LOADERS
-# =========================
+# ---------- LOADERS ----------
 @st.cache_resource
 def load_model():
     try:
@@ -133,9 +122,7 @@ def load_sample_data():
     except Exception:
         return None
 
-# =========================
-# HELPERS
-# =========================
+# ---------- HELPERS ----------
 def prepare_input_data(country, year, population, gdp, energy_per_capita,
                        primary_energy_consumption, cement_co2, coal_co2, oil_co2,
                        gas_co2, flaring_co2, methane, nitrous_oxide, features):
@@ -148,7 +135,6 @@ def prepare_input_data(country, year, population, gdp, energy_per_capita,
     x["cement_co2"]=cement_co2; x["coal_co2"]=coal_co2; x["oil_co2"]=oil_co2
     x["gas_co2"]=gas_co2; x["flaring_co2"]=flaring_co2
     x["methane"]=methane; x["nitrous_oxide"]=nitrous_oxide
-    # engineered
     x["year_sq"]=year**2; x["year_cub"]=year**3
     x["gdp_per_capita"]=x["gdp"]/max(population,1)
     x["energy_per_capita_log"]=np.log1p(energy_per_capita)
@@ -176,9 +162,7 @@ def source_breakdown_charts(coal, oil, gas, cement, flaring):
         bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(bar, use_container_width=True)
 
-# =========================
-# GEMINI (REST)
-# =========================
+# ---------- GEMINI ----------
 def _get_gemini_key()->str:
     key = st.secrets.get("GEMINI_API_KEY","")
     if not key: key = os.getenv("GEMINI_API_KEY","")
@@ -188,18 +172,14 @@ def _gemini_reply(user_message:str, history:list)->str:
     key=_get_gemini_key()
     if not key:
         return "❗ Gemini API key is missing. Add GEMINI_API_KEY in Streamlit Secrets."
-
-    # quick identity reply
     if user_message.strip().lower() in {"who are you","who are you?","who r u","who r u?"}:
         return "I'm a chatbot here to assist you with the Fossil Fuel Countdown project — ask me anything about the experience, EVs, emissions, or what the charts mean."
-
     preface = {"role":"user","parts":[{"text":PROJECT_CONTEXT}]}
     contents=[preface]
     for m in history:
         role = "user" if m["role"]=="user" else "model"
         contents.append({"role":role,"parts":[{"text":m["content"]}]})
     contents.append({"role":"user","parts":[{"text":user_message}]})
-
     url="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
     try:
         r=requests.post(url, params={"key":key}, headers={"Content-Type":"application/json"},
@@ -212,9 +192,7 @@ def _gemini_reply(user_message:str, history:list)->str:
     except Exception as e:
         return f"Error: {e}"
 
-# =========================
-# MAIN
-# =========================
+# ---------- HEADER ----------
 st.markdown("""
 <div class="header-wrap">
   <div class="title">Fossil Fuel COUNTDOWN</div>
@@ -260,6 +238,7 @@ with tabs[0]:
     nitrous=st.sidebar.number_input("Nitrous Oxide (Mt CO₂e)", 0.0, 1_000.0, 100.0, 5.0)
 
     st.markdown('<div class="section-title">Prediction</div>', unsafe_allow_html=True)
+
     predicted = None
     per_capita_t = None
     if model is None or scaler is None or features is None:
@@ -274,7 +253,6 @@ with tabs[0]:
                 per_capita_t=(predicted*1e6)/max(population,1)/1e3
                 vs=4.8; delta=per_capita_t-vs; comp="above" if delta>0 else "below"
 
-                # KPI row
                 kc1,kc2,kc3 = st.columns(3)
                 with kc1:
                     st.markdown(f'<div class="kpi"><div class="big">{predicted:,.2f} Mt</div><small>Predicted total CO₂</small></div>', unsafe_allow_html=True)
@@ -284,48 +262,23 @@ with tabs[0]:
                     st.markdown(f'<div class="kpi"><div class="big">{abs(delta):.1f} t</div><small>{comp} world avg (~4.8 t)</small></div>', unsafe_allow_html=True)
 
                 # Historical vs Predicted chart
-                hist_df = None
                 if data is not None and {'country','year','co2'}.issubset(set(data.columns)):
                     dctry = data[data['country']==country].dropna(subset=['year','co2'])
                     if not dctry.empty:
-                        hist_df = dctry[['year','co2']].copy()
-                        hist_df = hist_df.sort_values('year')
-                        # plot
+                        hist_df = dctry[['year','co2']].sort_values('year')
                         fig = px.line(hist_df, x='year', y='co2',
                                       title=f"Historical CO₂ for {country} with {year} prediction",
-                                      labels={'year':'Year','co2':'CO₂ (Mt)'},
-                                      markers=True)
+                                      labels={'year':'Year','co2':'CO₂ (Mt)'}, markers=True)
                         fig.add_scatter(x=[year], y=[predicted], mode='markers+text',
-                                        name='Predicted',
-                                        text=[f"{predicted:,.0f}"],
+                                        name='Predicted', text=[f"{predicted:,.0f}"],
                                         textposition='top center')
                         fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
                         st.plotly_chart(fig, use_container_width=True)
-
             except Exception as e:
                 st.error(f"Prediction failed: {e}")
 
     st.markdown('<div class="section-title">Source Mix</div>', unsafe_allow_html=True)
     source_breakdown_charts(coal, oil, gas, cement, flaring)
-
-    # Continents section (average 2020+)
-    st.markdown('<div class="section-title">Continents</div>', unsafe_allow_html=True)
-    if data is not None and {'continent','co2','year'}.issubset(set(data.columns)):
-        cont = (data.loc[data['year']>=2020, ['continent','co2']]
-                    .dropna()
-                    .groupby('continent', as_index=False)['co2'].mean()
-                    .rename(columns={'co2':'Avg CO₂ (Mt)'}))
-        if not cont.empty:
-            cont = cont.sort_values('Avg CO₂ (Mt)', ascending=True)
-            figc = px.bar(cont, x='Avg CO₂ (Mt)', y='continent', orientation='h',
-                          title='Average CO₂ by Continent (2020+)',
-                          text='Avg CO₂ (Mt)')
-            figc.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(figc, use_container_width=True)
-        else:
-            st.info("No continent data for the selected dataset window.")
-    else:
-        st.info("Continental data unavailable (check dataset columns).")
 
 # ---- EV Benefits ----
 with tabs[1]:
@@ -400,7 +353,7 @@ with tabs[3]:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=420)
     st.plotly_chart(fig, use_container_width=True)
 
-# ---- 💬 Chatbot tab (no rounded pill) ----
+# ---- Chatbot ----
 with tabs[4]:
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = [
