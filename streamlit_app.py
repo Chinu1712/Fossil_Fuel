@@ -1,4 +1,4 @@
-# app.py — Fossil Fuel COUNTDOWN (tabs + styled Chatbot tab)
+# app.py — Fossil Fuel COUNTDOWN (tabs + styled Chatbot tab, fixed rerun)
 import os
 import warnings
 from pathlib import Path
@@ -14,7 +14,7 @@ warnings.filterwarnings("ignore")
 BASE_DIR = Path(__file__).resolve().parent
 
 # =========================
-# PROJECT CONTEXT (always used by chatbot)
+# PROJECT CONTEXT (chatbot uses this)
 # =========================
 PROJECT_CONTEXT = """
 You are a chatbot designed to answer questions about the "Fossil Fuel Countdown: The Race to EV & Renewables" project.
@@ -27,42 +27,11 @@ Key Objectives:
 - Engage: Let visitors simulate their own "switch scenarios" and see instant results.
 
 What the Dashboard Shows:
-- Large screen dashboard with a world map/country view showing known petrol/diesel reserves.
-- Countdown timers for "Petrol runs out in X years" and "Diesel runs out in Y years" based on current consumption rates.
-- A graph of reserves vs. time (business as usual vs. EV adoption).
-- Interactive slider or buttons: "Adopt EVs faster" (10%, 25%, 50% per year) and "Add renewables" (% of grid energy from clean sources).
-- Instant visual change in: extended reserve lifespan (years) and CO₂ reduction over time.
-- Curiosity facts (e.g., "At current rates, the world uses enough oil in 1 day to fill 8,000 Olympic pools").
-- Call to action: "If every 5th vehicle goes electric, reserves last X years longer."
+- Country view + charts of reserves/emissions.
+- Countdown idea for depletion; sliders for EV/renewables scenarios.
+- Before/after curves and CO₂ savings equivalents.
 
-Core Data Used (Simplified for Demo):
-- Global oil reserves: ~1.65 trillion barrels.
-- Annual global oil consumption: ~35 billion barrels/year.
-- CO₂ emissions per litre: Petrol: ~2.31 kg CO₂/litre, Diesel: ~2.68 kg CO₂/litre.
-- EV energy consumption & renewable adoption scenarios are simulated.
-
-How the App Works (4 Steps):
-1. Initial Calculation (Business As Usual): Years until depletion = Total reserves / Annual consumption. Shows timeline graph.
-2. Scenario Simulation: Sliders adjust EV adoption rate/year and renewable share growth/year. Formula reduces fossil fuel consumption, new depletion dates appear instantly.
-3. CO₂ Impact Visualization: CO₂ avoided per year from reduced fuel burning, shown as equivalents (e.g., "X million trees planted").
-4. Comparison View: "If we do nothing" vs. "If we switch now" side-by-side bars.
-
-Engagement Flow:
-1. Visitor sees scary "Fossil Fuels Will Run Out In..." countdown.
-2. You invite them to adjust EV adoption/renewable sliders.
-3. They watch the depletion date move further into the future.
-4. Show the CO₂ savings meter shoot up.
-5. End with "Every small switch counts... what will you switch today?"
-
-Visualization Ideas:
-- Dual Countdown Timers (Petrol, Diesel: large, bold, red turning green).
-- Curved depletion graphs (before vs. after).
-- CO₂ Cloud Animation (shrinks as cleaner options are chosen).
-- World map heatmap (top consumers in red, turning greener).
-- Infographic-style callouts: "One EV saves ~X litres of fuel/year", "At 50% EV adoption, we delay petrol extinction by 15 years."
-
-Identity:
-If a user asks "who are you?" reply:
+Identity (for “who are you?”):
 "I'm a chatbot here to assist you with the Fossil Fuel Countdown project — ask me anything about the experience, EVs, emissions, or what the charts mean."
 """
 
@@ -75,15 +44,12 @@ st.markdown("""
 <style>
 :root{
   --bg:#0a1422; --fg:#e9f4ff; --muted:#93b0c8; --card:#0f2133; --card2:#132941;
-  --border:rgba(255,255,255,.10); --accent:#12d7ff; --accent2:#ff2e7e; --lime:#00ffb7;
+  --border:rgba(255,255,255,.10); --accent:#12d7ff; --accent2:#ff2e7e;
   --shadow:0 18px 38px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.28);
 }
 @media (prefers-color-scheme: light){
-  :root{
-    --bg:#f7fbff; --fg:#0b1b2b; --muted:#3c4e65; --card:#ffffff; --card2:#ffffff;
-    --border:rgba(11,27,43,.12); --accent:#0ea5e9; --accent2:#d946ef; --lime:#16a34a;
-    --shadow:0 16px 30px rgba(11,27,43,.15), 0 8px 16px rgba(11,27,43,.08);
-  }
+  :root{ --bg:#f7fbff; --fg:#0b1b2b; --muted:#3c4e65; --card:#ffffff; --card2:#ffffff;
+         --border:rgba(11,27,43,.12); --accent:#0ea5e9; --accent2:#d946ef; }
 }
 html, body, .stApp {
   background:
@@ -94,6 +60,7 @@ html, body, .stApp {
 }
 .block-container { padding-top: .6rem; }
 
+/* Header */
 .header-wrap{ text-align:center; margin: 0 0 .6rem; }
 .header-wrap .title{
   font-size: 2.4rem; font-weight: 900; letter-spacing:.04em;
@@ -102,7 +69,6 @@ html, body, .stApp {
 .header-wrap .subtitle{ font-size: .95rem; color: var(--muted); max-width: 980px; margin: .25rem auto .6rem; }
 
 .section-title { font-weight: 800; font-size: 1.2rem; margin: 1.0rem 0 .4rem; color:#bfe7ff; text-shadow:0 0 10px rgba(18,215,255,.35); }
-
 .card {
   background: linear-gradient(180deg, rgba(18,215,255,.05), rgba(18,215,255,.02)), var(--card);
   border:1px solid var(--border); border-radius:16px; padding:1rem 1.1rem; box-shadow: var(--shadow);
@@ -117,52 +83,39 @@ html, body, .stApp {
 /* Plotly background */
 .js-plotly-plot .plotly .main-svg { background: transparent !important; }
 
-/* Chatbot panel styles (tab) */
-.chatwrap {
-  max-width: 900px;
-  margin: 0 auto;
-}
+/* Chatbot (tab) */
+.chatwrap { max-width: 900px; margin: 0 auto; }
 .chatcard {
-  background: radial-gradient(180px 120px at 15% 0%, rgba(255,255,255,.08), transparent 40%),
+  background: radial-gradient(200px 140px at 15% 0%, rgba(255,255,255,.08), transparent 42%),
               linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
   border: 1px solid rgba(255,255,255,.18);
-  border-radius: 22px;
-  box-shadow: var(--shadow);
-  padding: 18px 18px 10px;
+  border-radius: 22px; box-shadow: var(--shadow);
+  padding: 18px 18px 12px;
 }
-.chatstream {
-  max-height: 58vh;
-  overflow-y: auto;
-  padding: 6px 6px 2px;
-}
+.chatstream { max-height: 58vh; overflow-y: auto; padding: 6px 6px 2px; }
 .bubble {
-  padding: 12px 16px;
-  border-radius: 18px;
-  margin: 10px 6px;
-  width: fit-content;
-  max-width: 85%;
-  box-shadow: 0 10px 25px rgba(0,0,0,.25);
-  word-wrap: break-word;
+  padding: 12px 16px; border-radius: 18px; margin: 10px 6px; width: fit-content; max-width: 85%;
+  box-shadow: 0 10px 25px rgba(0,0,0,.25); word-wrap: break-word;
 }
-.bubble.user {
-  margin-left: auto;
-  background: linear-gradient(145deg, #1db2ff, #0ea5e9);
-  color: #052033;
-  font-weight: 600;
+.bubble.user { margin-left: auto; background: linear-gradient(145deg, #1db2ff, #0ea5e9); color: #052033; font-weight: 600; }
+.bubble.bot  { background: linear-gradient(145deg, rgba(255,255,255,.30), rgba(255,255,255,.18));
+               border: 1px solid rgba(255,255,255,.16); color: #f6fbff; }
+
+/* Input row: pill textbox + gradient button (matches your mock) */
+.chatwrap .pill input {
+  border-radius: 999px !important; border: 1px solid rgba(255,255,255,.18) !important;
+  background: rgba(255,255,255,.04) !important; color: var(--fg) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 10px 24px rgba(0,0,0,.25) !important;
+  height: 44px;
 }
-.bubble.bot {
-  background: linear-gradient(145deg, rgba(255,255,255,.30), rgba(255,255,255,.18));
-  border: 1px solid rgba(255,255,255,.16);
-  color: #f6fbff;
-}
-.inputbar {
-  display:flex; gap:.6rem; align-items:center; padding: 10px 4px 6px;
-}
-.sendbtn {
-  background: linear-gradient(145deg, #ff7a1a, #ff5252);
-  border: none; color: white; font-weight: 700;
-  padding: 10px 18px; border-radius: 12px; cursor: pointer;
-  box-shadow: 0 10px 20px rgba(0,0,0,.25);
+.chatwrap .pill label { display:none; }
+.chatwrap .sendbtn [data-testid="baseButton-secondary"],
+.chatwrap .sendbtn [data-testid="baseButton-primary"],
+.chatwrap .sendbtn button {
+  background: linear-gradient(145deg, #ff7a1a, #ff5252) !important;
+  border: none !important; color: white !important; font-weight: 800 !important;
+  border-radius: 14px !important; height: 44px !important;
+  box-shadow: 0 10px 20px rgba(0,0,0,.25) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -231,7 +184,7 @@ def source_breakdown_charts(coal, oil, gas, cement, flaring):
         st.plotly_chart(bar, use_container_width=True)
 
 # =========================
-# GEMINI (REST) — use Secrets/env
+# GEMINI (REST)
 # =========================
 def _get_gemini_key()->str:
     key = st.secrets.get("GEMINI_API_KEY","")
@@ -243,7 +196,7 @@ def _gemini_reply(user_message:str, history:list)->str:
     if not key:
         return "❗ Gemini API key is missing. Add GEMINI_API_KEY in Streamlit Secrets."
 
-    # identity quick answer
+    # quick identity reply
     if user_message.strip().lower() in {"who are you","who are you?","who r u","who r u?"}:
         return "I'm a chatbot here to assist you with the Fossil Fuel Countdown project — ask me anything about the experience, EVs, emissions, or what the charts mean."
 
@@ -267,7 +220,7 @@ def _gemini_reply(user_message:str, history:list)->str:
         return f"Error: {e}"
 
 # =========================
-# MAIN APP CONTENT
+# MAIN
 # =========================
 st.markdown("""
 <div class="header-wrap">
@@ -284,7 +237,7 @@ tabs = st.tabs([
     "💬 Chatbot"
 ])
 
-# ============ CO₂ Predictor ============
+# ---- CO₂ Predictor ----
 with tabs[0]:
     data=load_sample_data()
     model, scaler, features = load_model()
@@ -339,7 +292,7 @@ with tabs[0]:
     st.markdown('<div class="section-title">Source Mix</div>', unsafe_allow_html=True)
     source_breakdown_charts(coal, oil, gas, cement, flaring)
 
-# ============ EV Benefits ============
+# ---- EV Benefits ----
 with tabs[1]:
     st.markdown('<div class="section-title">Cost & Savings</div>', unsafe_allow_html=True)
     c1,c2 = st.columns(2)
@@ -383,7 +336,7 @@ with tabs[1]:
         line.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(line, use_container_width=True)
 
-# ============ Environmental Impact ============
+# ---- Environmental Impact ----
 with tabs[2]:
     st.markdown("""
 <div class="card">
@@ -402,7 +355,7 @@ with tabs[2]:
 </div>
 """, unsafe_allow_html=True)
 
-# ============ EV Statistics ============
+# ---- EV Statistics ----
 with tabs[3]:
     years=list(range(2015,2024))
     global_ev_sales=[0.4,0.7,1.2,2.0,2.2,3.1,6.6,10.5,14.1]
@@ -412,9 +365,8 @@ with tabs[3]:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=420)
     st.plotly_chart(fig, use_container_width=True)
 
-# ============ 💬 Chatbot (tab) ============
+# ---- 💬 Chatbot tab ----
 with tabs[4]:
-    # init chat history
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = [
             {"role":"model",
@@ -426,25 +378,29 @@ with tabs[4]:
     st.markdown('<div class="chatwrap"><div class="chatcard">', unsafe_allow_html=True)
     st.markdown('<div class="chatstream">', unsafe_allow_html=True)
 
-    # render messages
     def esc(s:str)->str:
-        return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
-
+        return s.replace("&","&amp;").replace("<","&lt;").replace(">", "&gt;")
     for m in st.session_state.chat_messages:
         cls = "user" if m["role"]=="user" else "bot"
         st.markdown(f'<div class="bubble {cls}">{esc(m["content"])}</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)  # end chatstream
 
-    # input row (form prevents accidental double-sends)
+    # Input row (form to catch Enter; reruns with st.rerun)
     with st.form("chat_send_form", clear_on_submit=True):
-        cols = st.columns([6,1])
-        with cols[0]:
+        c1, c2 = st.columns([6,1])
+        with c1:
+            # put the input inside a wrapper to style as pill
+            st.markdown('<div class="pill">', unsafe_allow_html=True)
             user_text = st.text_input("Ask about fossil fuels, EVs, or CO₂…",
                                       label_visibility="collapsed",
                                       placeholder="Ask me about EVs, emissions, charts, or how to use this app…")
-        with cols[1]:
+            st.markdown('</div>', unsafe_allow_html=True)
+        with c2:
+            st.markdown('<div class="sendbtn">', unsafe_allow_html=True)
             sent = st.form_submit_button("Send", use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
         if sent and user_text.strip():
             st.session_state.chat_messages.append({"role":"user","content":user_text.strip()})
             try:
@@ -452,6 +408,6 @@ with tabs[4]:
             except Exception as e:
                 reply = f"Sorry, I hit an error: {e}"
             st.session_state.chat_messages.append({"role":"model","content":reply})
-            st.experimental_rerun()
+            st.rerun()  # ✅ replaces deprecated st.experimental_rerun()
 
     st.markdown('</div></div>', unsafe_allow_html=True)
