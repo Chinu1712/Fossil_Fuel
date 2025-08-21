@@ -63,7 +63,7 @@ Visualization Ideas:
 
 Identity:
 If a user asks "who are you?" reply:
-"I’m a chatbot here to assist you with the Fossil Fuel Countdown project — ask me anything about the experience, EVs, emissions, or what the charts mean."
+"I'm a chatbot here to assist you with the Fossil Fuel Countdown project — ask me anything about the experience, EVs, emissions, or what the charts mean."
 """
 
 # =========================
@@ -77,7 +77,7 @@ st.markdown("""
   --bg:#0a1422; --fg:#e9f4ff; --muted:#93b0c8; --card:#0f2133; --card2:#132941;
   --border:rgba(255,255,255,.10); --accent:#12d7ff; --accent2:#ff2e7e; --lime:#00ffb7;
   --shadow:0 18px 38px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.28);
-  --zchat: 2147483000;
+  --zchat: 2147483647;
 }
 @media (prefers-color-scheme: light){
   :root{
@@ -118,28 +118,141 @@ html, body, .stApp {
 /* Plotly background */
 .js-plotly-plot .plotly .main-svg { background: transparent !important; }
 
-/* Floating chat FAB and panel */
-#chat_fab {
-  position:fixed; right:22px; bottom:22px; z-index:var(--zchat);
-  width:60px; height:60px; border-radius:16px; display:flex; align-items:center; justify-content:center;
-  background: linear-gradient(145deg, #16c5ff, #ff2e7e); color:#fff; border:none;
-  box-shadow: 0 16px 34px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.2); cursor:pointer; font-size:26px;
+/* Floating chat FAB and panel - Highest z-index possible */
+.chat-fab {
+  position: fixed !important;
+  right: 22px !important;
+  bottom: 22px !important;
+  z-index: var(--zchat) !important;
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #16c5ff, #ff2e7e);
+  color: #fff;
+  border: none;
+  box-shadow: 0 16px 34px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.2);
+  cursor: pointer;
+  font-size: 26px;
+  transition: all 0.3s ease;
 }
-#chat_panel {
-  position:fixed; right:22px; bottom:92px; z-index:calc(var(--zchat) - 1);
-  width:min(560px, 92vw);
-  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  border:1px solid rgba(255,255,255,.16); border-radius:20px; overflow:hidden;
+
+.chat-fab:hover {
+  transform: scale(1.05);
+  box-shadow: 0 20px 40px rgba(0,0,0,.4), 0 10px 20px rgba(0,0,0,.3);
+}
+
+.chat-panel {
+  position: fixed !important;
+  right: 22px !important;
+  bottom: 92px !important;
+  z-index: calc(var(--zchat) - 1) !important;
+  width: min(560px, 92vw);
+  max-height: 70vh;
+  background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.08));
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 20px;
+  overflow: hidden;
   box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
 }
-.ff_header{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.14); }
-.ff_title{ font-weight:900; color:#f3f9ff; }
-.ff_close{ color:#f3f9ff; text-decoration:none; font-size:20px; opacity:.85; }
-.ff_body{ padding:14px; overflow:auto; max-height:56vh; }
-.bubble{ padding:.7rem .9rem; border-radius:16px; margin:.45rem 0; width:fit-content; max-width:86%; box-shadow:0 5px 16px rgba(0,0,0,.2); }
-.me{ background: linear-gradient(145deg, rgba(22,197,255,.85), rgba(22,197,255,.55)); color:#052033; margin-left:auto; }
-.bot{ background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.16)); color:#f7fbff; border:1px solid rgba(255,255,255,.15); }
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.05);
+}
+
+.chat-title {
+  font-weight: 900;
+  color: #f3f9ff;
+  font-size: 1.1rem;
+}
+
+.chat-close {
+  background: transparent;
+  border: none;
+  color: #f3f9ff;
+  font-size: 22px;
+  cursor: pointer;
+  opacity: 0.9;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.chat-close:hover {
+  background: rgba(255,255,255,.1);
+  opacity: 1;
+}
+
+.chat-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 200px;
+  max-height: 400px;
+}
+
+.chat-input-area {
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.03);
+}
+
+.bubble {
+  padding: 10px 14px;
+  border-radius: 16px;
+  margin: 8px 0;
+  width: fit-content;
+  max-width: 85%;
+  box-shadow: 0 5px 16px rgba(0,0,0,.2);
+  word-wrap: break-word;
+}
+
+.bubble.user {
+  background: linear-gradient(145deg, rgba(22,197,255,.9), rgba(22,197,255,.7));
+  color: #052033;
+  margin-left: auto;
+  font-weight: 500;
+}
+
+.bubble.bot {
+  background: linear-gradient(145deg, rgba(255,255,255,.25), rgba(255,255,255,.18));
+  color: #f7fbff;
+  border: 1px solid rgba(255,255,255,.15);
+}
+
+/* Hide default streamlit elements that might interfere */
+.stApp > header {
+  background: transparent;
+}
+
+/* Ensure chat is always on top */
+.chat-fab, .chat-panel {
+  pointer-events: all !important;
+}
+
+/* Override any conflicting styles */
+div[data-testid="stSidebar"] {
+  z-index: 1000;
+}
+
+.main .block-container {
+  z-index: 1;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -239,150 +352,96 @@ def _gemini_reply(user_message:str, history:list)->str:
         return f"Error: {e}"
 
 # =========================
-# FLOATING CHAT (Open/Close via query param; send via st.chat_input)
-# =========================
-# =========================
-# FLOATING CHAT (SPA-like, persistent, no reload)
+# FLOATING CHAT - FIXED VERSION
 # =========================
 def render_floating_chat():
     """
-    Floating chatbot:
-      - Opens/closes via in-page state (not GET params).
-      - Sending a message updates state, not triggers full rerun.
-      - Always answers with PROJECT_CONTEXT.
-      - FAB stays above manage app with extreme z-index.
+    Fixed floating chatbot with proper state management and event handling
     """
-    # Initialize state variables
+    # Initialize session state
     if "chat_open" not in st.session_state:
         st.session_state.chat_open = False
-    if "chat" not in st.session_state:
-        st.session_state.chat = [
-            {"role": "model",
-             "content": "Hi! I’m a chatbot here to assist you about the Fossil Fuel Countdown project. Ask me anything about EVs, emissions, or what the charts mean."}
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = [
+            {"role": "bot", "content": "Hi! I'm here to help with the Fossil Fuel Countdown project. Ask me anything about EVs, emissions, or renewable energy!"}
         ]
-    if "chat_input" not in st.session_state:
-        st.session_state.chat_input = ""
 
-    # --- Floating FAB ---
-    st.markdown(
-        """
-        <style>
-        #chat_fab {
-          position:fixed; right:22px; bottom:22px; z-index:2147483999 !important;
-          width:60px; height:60px; border-radius:16px;
-          display:flex; align-items:center; justify-content:center;
-          background: linear-gradient(145deg, #16c5ff, #ff2e7e);
-          color:#fff; border:none; font-size:26px; cursor:pointer;
-          box-shadow: 0 16px 34px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.2);
-        }
-        /* Chat panel high z-index */
-        #chat_panel {
-          position:fixed; right:22px; bottom:92px; z-index:2147483998;
-          width:min(560px, 92vw);
-          background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
-          -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-          border:1px solid rgba(255,255,255,.16); border-radius:20px; overflow:hidden;
-          box-shadow: 0 18px 38px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.28);
-        }
-        .ff_header{ display:flex; align-items:center; justify-content:space-between;
-                    padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.14); }
-        .ff_title{ font-weight:900; color:#f3f9ff; }
-        .ff_close_btn{
-          background:transparent; border:none; color:#f3f9ff; font-size:20px; cursor:pointer; opacity:.9;
-        }
-        .ff_body{ padding:14px; overflow:auto; max-height:56vh; }
-        .bubble{ padding:.7rem .9rem; border-radius:16px; margin:.45rem 0; width:fit-content; max-width:86%;
-                 box-shadow:0 5px 16px rgba(0,0,0,.2); }
-        .me{ background: linear-gradient(145deg, rgba(22,197,255,.85), rgba(22,197,255,.55));
-             color:#052033; margin-left:auto; }
-        .bot{ background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.16));
-              color:#f7fbff; border:1px solid rgba(255,255,255,.15); }
-        </style>
-        <button id="chat_fab" title="Chat" onclick="window.dispatchEvent(new CustomEvent('st-open-chat'));">💬</button>
-        <script>
-        window.addEventListener('st-open-chat', () => {
-          window.parent.postMessage({type:'streamlit:callBack', args:['openChat']}, "*");
-        });
-        window.addEventListener('st-close-chat', () => {
-          window.parent.postMessage({type:'streamlit:callBack', args:['closeChat']}, "*");
-        });
-        </script>
-        """,
-        unsafe_allow_html=True
-    )
+    # Chat toggle buttons
+    col1, col2 = st.columns([10, 1])
+    with col2:
+        if st.button("💬", key="chat_toggle", help="Open Chat"):
+            st.session_state.chat_open = True
 
-    # React to open/close events by setting session_state
-    import streamlit.components.v1 as components
+    # Floating FAB (Always visible)
+    st.markdown(f"""
+    <div class="chat-fab" onclick="document.getElementById('chat_toggle').click();" title="Open Fossil Fuel Chat">
+        💬
+    </div>
+    """, unsafe_allow_html=True)
 
-    # Efficient event listeners: toggling via dummy component triggers
-    components.html(
-        """
-        <script>
-        if (!window.stChatSetup){
-            window.stChatSetup = true;
-            window.parent.addEventListener('streamlit:callBack', function(ev){
-                if(ev.data && ev.data.args){
-                    if(ev.data.args[0]=='openChat'){
-                        window.parent.document.dispatchEvent(new CustomEvent('OPEN_CHAT_PANEL'));
-                    }
-                    if(ev.data.args=='closeChat'){
-                        window.parent.document.dispatchEvent(new CustomEvent('CLOSE_CHAT_PANEL'));
-                    }
-                }
-            });
-        }
-        </script>
-        """, height=0
-    )
-
-    # Open/close triggers
-    st.session_state.chat_open = st.session_state.get('chat_open', False)
-    open_flag = st.session_state.get('open_chat_panel', False)
-    close_flag = st.session_state.get('close_chat_panel', False)
-    if open_flag:
-        st.session_state.chat_open = True
-        st.session_state.open_chat_panel = False
-    if close_flag:
-        st.session_state.chat_open = False
-        st.session_state.close_chat_panel = False
-
-    # --- Panel (if open) ---
+    # Chat Panel
     if st.session_state.chat_open:
-        st.markdown(
-            """
-            <div id="chat_panel" role="dialog" aria-label="Fossil Fuel Chat" aria-modal="true">
-              <div class="ff_header">
-                <div class="ff_title">Fossil Fuel Chat</div>
-                <button class="ff_close_btn" onclick="window.dispatchEvent(new CustomEvent('st-close-chat'));" title="Close">✕</button>
-              </div>
-              <div class="ff_body">
-            """,
-            unsafe_allow_html=True
-        )
-
-        # Display chat messages
-        def esc(t: str) -> str:
-            return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
-        for m in st.session_state.chat:
-            cls = "me" if m["role"]=="user" else "bot"
-            st.markdown(f'<div class="bubble {cls}">{esc(m["content"])}</div>', unsafe_allow_html=True)
-
-        # Input (doesn't reload page)
-        user_input = st.text_input("Ask about fossil fuels, EVs, or CO₂…", value=st.session_state.chat_input, key="chat_input")
-        if st.button("Send", key="send_button", use_container_width=True):
-            prompt = st.session_state.chat_input.strip()
-            if prompt:
-                st.session_state.chat.append({"role":"user","content":prompt})
-                reply = _gemini_reply(prompt, st.session_state.chat)
-                st.session_state.chat.append({"role":"model","content":reply})
-                st.session_state.chat_input = ""  # reset message after sending
-
-        st.markdown("</div></div>", unsafe_allow_html=True)
-
+        # Create chat container
+        chat_container = st.container()
+        
+        with chat_container:
+            st.markdown("""
+            <div class="chat-panel">
+                <div class="chat-header">
+                    <div class="chat-title">🛢️ Fossil Fuel Chat</div>
+                </div>
+                <div class="chat-body">
+            """, unsafe_allow_html=True)
+            
+            # Display chat messages
+            for msg in st.session_state.chat_history:
+                role_class = "user" if msg["role"] == "user" else "bot"
+                # Escape HTML to prevent XSS
+                content = msg["content"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                st.markdown(f'<div class="bubble {role_class}">{content}</div>', unsafe_allow_html=True)
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Chat input area
+            st.markdown('<div class="chat-input-area">', unsafe_allow_html=True)
+            
+            # Create columns for input and buttons
+            input_col, send_col, close_col = st.columns([6, 1, 1])
+            
+            with input_col:
+                user_input = st.text_input("Ask about fossil fuels, EVs, renewables...", 
+                                         key="chat_input", 
+                                         placeholder="Type your question here...",
+                                         label_visibility="collapsed")
+            
+            with send_col:
+                if st.button("Send", key="chat_send", use_container_width=True, type="primary"):
+                    if user_input.strip():
+                        # Add user message
+                        st.session_state.chat_history.append({"role": "user", "content": user_input.strip()})
+                        
+                        # Get bot response
+                        try:
+                            bot_response = _gemini_reply(user_input.strip(), st.session_state.chat_history[:-1])
+                            st.session_state.chat_history.append({"role": "bot", "content": bot_response})
+                        except Exception as e:
+                            error_msg = f"Sorry, I'm having trouble responding right now. Error: {str(e)}"
+                            st.session_state.chat_history.append({"role": "bot", "content": error_msg})
+                        
+                        # Clear input and rerun to show new messages
+                        st.rerun()
+            
+            with close_col:
+                if st.button("✕", key="chat_close", use_container_width=True, help="Close Chat"):
+                    st.session_state.chat_open = False
+                    st.rerun()
+            
+            st.markdown("</div></div>", unsafe_allow_html=True)
 
 # =========================
-# HEADER + TABS
+# MAIN APP CONTENT
 # =========================
+# Header
 st.markdown("""
 <div class="header-wrap">
   <div class="title">Fossil Fuel COUNTDOWN</div>
@@ -390,6 +449,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Tabs
 tabs = st.tabs(["🔮 CO₂ Predictor", "🚗 EV Benefits", "🌱 Environmental Impact", "📊 EV Statistics"])
 
 # ============ CO₂ Predictor ============
@@ -521,5 +581,5 @@ with tabs[3]:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=420)
     st.plotly_chart(fig, use_container_width=True)
 
-# === Floating chatbot (on all tabs) ===
+# === Render floating chatbot on all pages ===
 render_floating_chat()
