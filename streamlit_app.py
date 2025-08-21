@@ -1,4 +1,4 @@
-# app.py — Fossil Fuel COUNTDOWN (tabs + styled Chatbot tab, fixed rerun)
+# app.py — Fossil Fuel COUNTDOWN (tabs + styled Chatbot tab, continents, extra post-prediction charts)
 import os
 import warnings
 from pathlib import Path
@@ -77,7 +77,7 @@ html, body, .stApp {
   background: linear-gradient(180deg, rgba(255,46,126,.06), rgba(18,215,255,.05)), var(--card2);
   border:1px solid var(--border); border-radius:18px; padding:1rem; text-align:center; box-shadow: var(--shadow);
 }
-.kpi .big { font-size: 1.8rem; font-weight: 900; letter-spacing:.03em; color:#ff2e7e; text-shadow:0 0 12px rgba(255,46,126,.45); }
+.kpi .big { font-size: 1.2rem; font-weight: 900; letter-spacing:.02em; color:#ffb703; text-shadow:0 0 10px rgba(255,183,3,.35); }
 .kpi small { color: var(--muted); }
 
 /* Plotly background */
@@ -101,20 +101,13 @@ html, body, .stApp {
 .bubble.bot  { background: linear-gradient(145deg, rgba(255,255,255,.30), rgba(255,255,255,.18));
                border: 1px solid rgba(255,255,255,.16); color: #f6fbff; }
 
-/* Input row: pill textbox + gradient button (matches your mock) */
-.chatwrap .pill input {
-  border-radius: 999px !important; border: 1px solid rgba(255,255,255,.18) !important;
-  background: rgba(255,255,255,.04) !important; color: var(--fg) !important;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 10px 24px rgba(0,0,0,.25) !important;
-  height: 44px;
-}
-.chatwrap .pill label { display:none; }
+/* Input row (square textbox + gradient button) */
 .chatwrap .sendbtn [data-testid="baseButton-secondary"],
 .chatwrap .sendbtn [data-testid="baseButton-primary"],
 .chatwrap .sendbtn button {
   background: linear-gradient(145deg, #ff7a1a, #ff5252) !important;
   border: none !important; color: white !important; font-weight: 800 !important;
-  border-radius: 14px !important; height: 44px !important;
+  border-radius: 10px !important; height: 44px !important;
   box-shadow: 0 10px 20px rgba(0,0,0,.25) !important;
 }
 </style>
@@ -267,6 +260,8 @@ with tabs[0]:
     nitrous=st.sidebar.number_input("Nitrous Oxide (Mt CO₂e)", 0.0, 1_000.0, 100.0, 5.0)
 
     st.markdown('<div class="section-title">Prediction</div>', unsafe_allow_html=True)
+    predicted = None
+    per_capita_t = None
     if model is None or scaler is None or features is None:
         st.warning("Prediction model files not found; charts below still work.")
     else:
@@ -275,22 +270,62 @@ with tabs[0]:
                 X=prepare_input_data(country, year, population, gdp, energy_per_capita,
                                      primary_energy, cement, coal, oil, gas, flaring, methane, nitrous, features)
                 Xs=scaler.transform(X)
-                pred=float(model.predict(Xs)[0]) # Mt
-                per_capita_t=(pred*1e6)/max(population,1)/1e3
+                predicted=float(model.predict(Xs)[0]) # Mt
+                per_capita_t=(predicted*1e6)/max(population,1)/1e3
                 vs=4.8; delta=per_capita_t-vs; comp="above" if delta>0 else "below"
-                st.markdown(f"""
-<div class="card">
-  <b>🎯 Predicted CO₂</b><br>
-  <span style="font-size:1.4rem">{pred:,.2f} Mt</span><br>
-  <small>Per capita: {per_capita_t:,.2f} t — {abs(delta):.1f} t {comp} global avg ~{vs} t</small><br>
-  <small>{country} • {year}</small>
-</div>
-""", unsafe_allow_html=True)
+
+                # KPI row
+                kc1,kc2,kc3 = st.columns(3)
+                with kc1:
+                    st.markdown(f'<div class="kpi"><div class="big">{predicted:,.2f} Mt</div><small>Predicted total CO₂</small></div>', unsafe_allow_html=True)
+                with kc2:
+                    st.markdown(f'<div class="kpi"><div class="big">{per_capita_t:,.2f} t</div><small>Per-capita emissions</small></div>', unsafe_allow_html=True)
+                with kc3:
+                    st.markdown(f'<div class="kpi"><div class="big">{abs(delta):.1f} t</div><small>{comp} world avg (~4.8 t)</small></div>', unsafe_allow_html=True)
+
+                # Historical vs Predicted chart
+                hist_df = None
+                if data is not None and {'country','year','co2'}.issubset(set(data.columns)):
+                    dctry = data[data['country']==country].dropna(subset=['year','co2'])
+                    if not dctry.empty:
+                        hist_df = dctry[['year','co2']].copy()
+                        hist_df = hist_df.sort_values('year')
+                        # plot
+                        fig = px.line(hist_df, x='year', y='co2',
+                                      title=f"Historical CO₂ for {country} with {year} prediction",
+                                      labels={'year':'Year','co2':'CO₂ (Mt)'},
+                                      markers=True)
+                        fig.add_scatter(x=[year], y=[predicted], mode='markers+text',
+                                        name='Predicted',
+                                        text=[f"{predicted:,.0f}"],
+                                        textposition='top center')
+                        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                        st.plotly_chart(fig, use_container_width=True)
+
             except Exception as e:
                 st.error(f"Prediction failed: {e}")
 
     st.markdown('<div class="section-title">Source Mix</div>', unsafe_allow_html=True)
     source_breakdown_charts(coal, oil, gas, cement, flaring)
+
+    # Continents section (average 2020+)
+    st.markdown('<div class="section-title">Continents</div>', unsafe_allow_html=True)
+    if data is not None and {'continent','co2','year'}.issubset(set(data.columns)):
+        cont = (data.loc[data['year']>=2020, ['continent','co2']]
+                    .dropna()
+                    .groupby('continent', as_index=False)['co2'].mean()
+                    .rename(columns={'co2':'Avg CO₂ (Mt)'}))
+        if not cont.empty:
+            cont = cont.sort_values('Avg CO₂ (Mt)', ascending=True)
+            figc = px.bar(cont, x='Avg CO₂ (Mt)', y='continent', orientation='h',
+                          title='Average CO₂ by Continent (2020+)',
+                          text='Avg CO₂ (Mt)')
+            figc.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(figc, use_container_width=True)
+        else:
+            st.info("No continent data for the selected dataset window.")
+    else:
+        st.info("Continental data unavailable (check dataset columns).")
 
 # ---- EV Benefits ----
 with tabs[1]:
@@ -314,7 +349,7 @@ with tabs[1]:
 <div class="kpi">
   <div class="big">${(annual_gas_cost-annual_elec_cost):,.0f}</div>
   <small>Annual savings</small><br>
-  <small>Gas fuel: ${annual_gas_cost:,.0f} • Electric: ${annual_elec_cost:,.0f}</small><br>
+  <small>Gas: ${annual_gas_cost:,.0f} • Electric: ${annual_elec_cost:,.0f}</small><br>
   <small>Total {years}-yr savings: ${(total_gas-total_ev):,.0f}</small>
 </div>
 """, unsafe_allow_html=True)
@@ -365,7 +400,7 @@ with tabs[3]:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=420)
     st.plotly_chart(fig, use_container_width=True)
 
-# ---- 💬 Chatbot tab ----
+# ---- 💬 Chatbot tab (no rounded pill) ----
 with tabs[4]:
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = [
@@ -386,16 +421,14 @@ with tabs[4]:
 
     st.markdown('</div>', unsafe_allow_html=True)  # end chatstream
 
-    # Input row (form to catch Enter; reruns with st.rerun)
     with st.form("chat_send_form", clear_on_submit=True):
         c1, c2 = st.columns([6,1])
         with c1:
-            # put the input inside a wrapper to style as pill
-            st.markdown('<div class="pill">', unsafe_allow_html=True)
-            user_text = st.text_input("Ask about fossil fuels, EVs, or CO₂…",
-                                      label_visibility="collapsed",
-                                      placeholder="Ask me about EVs, emissions, charts, or how to use this app…")
-            st.markdown('</div>', unsafe_allow_html=True)
+            user_text = st.text_input(
+                "Ask about fossil fuels, EVs, or CO₂…",
+                label_visibility="collapsed",
+                placeholder="Ask me about EVs, emissions, charts, or how to use this app…"
+            )
         with c2:
             st.markdown('<div class="sendbtn">', unsafe_allow_html=True)
             sent = st.form_submit_button("Send", use_container_width=True)
@@ -408,6 +441,6 @@ with tabs[4]:
             except Exception as e:
                 reply = f"Sorry, I hit an error: {e}"
             st.session_state.chat_messages.append({"role":"model","content":reply})
-            st.rerun()  # ✅ replaces deprecated st.experimental_rerun()
+            st.rerun()
 
     st.markdown('</div></div>', unsafe_allow_html=True)
