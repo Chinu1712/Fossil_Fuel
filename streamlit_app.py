@@ -1,11 +1,16 @@
-# streamlit_app.py
-import os, warnings
+# streamlit_app.py  — Fossil Fuel COUNTDOWN
+# Full app: predictor, EV benefits, impact, stats + floating Gemini chat widget.
+
+import os
+import warnings
 from pathlib import Path
+
+import joblib
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import requests
 import streamlit as st
-import joblib, requests
 
 warnings.filterwarnings("ignore")
 BASE_DIR = Path(__file__).resolve().parent
@@ -13,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent
 st.set_page_config(page_title="Fossil Fuel COUNTDOWN", page_icon="🛢️", layout="wide")
 
 # =========================
-# THEME + STYLES
+# THEME & STYLES
 # =========================
 st.markdown("""
 <style>
@@ -44,7 +49,7 @@ html, body, .stApp {
   font-size: 2.4rem; font-weight: 900; letter-spacing:.04em;
   color: var(--accent); text-shadow:0 0 14px rgba(18,215,255,.45);
 }
-.header-wrap .subtitle{ font-size: .95rem; color: var(--muted); max-width: 900px; margin: .25rem auto .6rem; }
+.header-wrap .subtitle{ font-size: .95rem; color: var(--muted); max-width: 980px; margin: .25rem auto .6rem; }
 
 .section-title { font-weight: 800; font-size: 1.2rem; margin: 1.0rem 0 .4rem; color:#bfe7ff; text-shadow:0 0 10px rgba(18,215,255,.35); }
 
@@ -102,7 +107,7 @@ html, body, .stApp {
 """, unsafe_allow_html=True)
 
 # =========================
-# LOADING
+# LOADERS
 # =========================
 @st.cache_resource
 def load_model():
@@ -150,14 +155,17 @@ def prepare_input_data(country, year, population, gdp, energy_per_capita,
     return pd.DataFrame([x])
 
 def source_breakdown_charts(coal, oil, gas, cement, flaring):
-    df = pd.DataFrame({"Source":["Coal","Oil","Gas","Cement","Flaring"], "Emissions (Mt)":[coal,oil,gas,cement,flaring]})
+    df = pd.DataFrame({"Source":["Coal","Oil","Gas","Cement","Flaring"],
+                       "Emissions (Mt)":[coal,oil,gas,cement,flaring]})
     c1,c2 = st.columns(2)
     with c1:
-        fig = px.pie(df, names="Source", values="Emissions (Mt)", hole=.35, title="CO₂ by Source (input mix)")
+        fig = px.pie(df, names="Source", values="Emissions (Mt)", hole=.35,
+                     title="CO₂ by Source (input mix)")
         fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig, use_container_width=True)
     with c2:
-        bar = px.bar(df, x="Source", y="Emissions (Mt)", text_auto=True, title="Source Contribution")
+        bar = px.bar(df, x="Source", y="Emissions (Mt)", text_auto=True,
+                     title="Source Contribution")
         bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(bar, use_container_width=True)
 
@@ -167,7 +175,8 @@ def continent_stats(df):
         return
     recent = df[(df["year"]>=2020) & df["continent"].notna()]
     cont = recent.groupby("continent", as_index=False)["co2"].sum().sort_values("co2", ascending=False)
-    fig = px.bar(cont, x="continent", y="co2", text_auto=True, title="Total CO₂ by Continent (2020+)",
+    fig = px.bar(cont, x="continent", y="co2", text_auto=True,
+                 title="Total CO₂ by Continent (2020+)",
                  labels={"continent":"Continent","co2":"CO₂ Emissions (Mt)"})
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig, use_container_width=True)
@@ -212,30 +221,41 @@ def _gemini_reply(user_message:str, history:list)->str:
         return f"Error: {e}"
 
 def render_floating_chat():
-    """Floating button + modal chat. High z-index; JS open/close; Enter-to-send; robust."""
+    """Floating button + modal chat. No f-strings inside HTML/JS to avoid brace issues."""
     if "chat" not in st.session_state:
-        st.session_state.chat=[{"role":"model","content":"Hi! Ask me about fossil fuels, EVs, or CO₂."}]
+        st.session_state.chat = [
+            {"role": "model", "content": "Hi! Ask me about fossil fuels, EVs, or CO₂."}
+        ]
 
-    qp=dict(st.query_params)
-    msg=qp.get("chatq")
+    # Handle message from query param (?chatq=...) so Send works
+    qp = dict(st.query_params)
+    msg = qp.get("chatq")
     if msg:
-        msg=msg.strip()
+        msg = msg.strip()
         if msg:
-            st.session_state.chat.append({"role":"user","content":msg})
-            reply=_gemini_reply(msg, st.session_state.chat)
-            st.session_state.chat.append({"role":"model","content":reply})
-        # keep the panel open after reload
-        st.query_params["open"]="1"
-        if "chatq" in st.query_params: del st.query_params["chatq"]
+            st.session_state.chat.append({"role": "user", "content": msg})
+            reply = _gemini_reply(msg, st.session_state.chat)
+            st.session_state.chat.append({"role": "model", "content": reply})
+        # Keep the panel open and clear chatq
+        st.query_params["open"] = "1"
+        if "chatq" in st.query_params:
+            del st.query_params["chatq"]
 
-    def esc(t:str)->str:
-        return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+    # Build bubbles safely
+    def esc(t: str) -> str:
+        return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-    bubbles="".join([f'<div class="bubble {"me" if m["role"]=="user" else "bot"}">{esc(m["content"])}</div>'
-                     for m in st.session_state.chat])
+    bubbles = "".join(
+        [
+            '<div class="bubble {cls}">{txt}</div>'.format(
+                cls=("me" if m["role"] == "user" else "bot"), txt=esc(m["content"])
+            )
+            for m in st.session_state.chat
+        ]
+    )
 
-    # Floating button and modal
-    st.markdown(f"""
+    # Plain triple-quoted string (NOT an f-string). We inject bubbles via placeholder.
+    html = """
 <button id="ff_fab" title="Ask">💬</button>
 
 <div id="ff_chat">
@@ -243,7 +263,7 @@ def render_floating_chat():
     <div class="ff_title">Fossil Fuel Chat</div>
     <button class="ff_close" id="ff_close">✕</button>
   </div>
-  <div class="ff_body" id="ff_body">{bubbles}</div>
+  <div class="ff_body" id="ff_body">%%BUBBLES%%</div>
   <div class="ff_input">
     <textarea id="ff_input" placeholder="Ask me about fossil fuels, EVs, or CO₂!"></textarea>
     <button class="ff_send" id="ff_send">Send</button>
@@ -252,54 +272,79 @@ def render_floating_chat():
 
 <script>
 (function(){
-  const fab=document.getElementById("ff_fab");
-  const box=document.getElementById("ff_chat");
-  const closeBtn=document.getElementById("ff_close");
-  const sendBtn=document.getElementById("ff_send");
-  const input=document.getElementById("ff_input");
-  const body=document.getElementById("ff_body");
+  const fab = document.getElementById("ff_fab");
+  const box = document.getElementById("ff_chat");
+  const closeBtn = document.getElementById("ff_close");
+  const sendBtn = document.getElementById("ff_send");
+  const input = document.getElementById("ff_input");
+  const body = document.getElementById("ff_body");
 
-  function openBox(){ if(box){ box.style.display="block"; setTimeout(()=>{{ if(body) body.scrollTop=body.scrollHeight; }}, 50); } }
-  function closeBox(){ if(box){ box.style.display="none"; } }
+  function openBox(){
+    if(!box) return;
+    box.style.display = "block";
+    setTimeout(function(){
+      if(body) body.scrollTop = body.scrollHeight;
+    }, 50);
+  }
+  function closeBox(){
+    if(!box) return;
+    box.style.display = "none";
+  }
 
   // Restore open state if ?open=1
-  try {{
-    const sp=new URLSearchParams(window.location.search);
-    if(sp.get("open")==="1") openBox();
-  }} catch(e){{}}
+  try {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("open") === "1") openBox();
+  } catch(e) {}
 
-  if(fab) fab.onclick=function(){
-    if(box.style.display==="block"){ 
+  if (fab) fab.onclick = function(){
+    if (box.style.display === "block"){
       closeBox();
-      try{{ const u=new URL(window.location.href); u.searchParams.delete("open"); window.history.replaceState({{}}, "", u.toString()); }}catch(e){{}}
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.delete("open");
+        window.history.replaceState({}, "", u.toString());
+      } catch(e) {}
     } else {
       openBox();
-      try{{ const u=new URL(window.location.href); u.searchParams.set("open","1"); window.history.replaceState({{}}, "", u.toString()); }}catch(e){{}}
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.set("open", "1");
+        window.history.replaceState({}, "", u.toString());
+      } catch(e) {}
     }
   };
-  if(closeBtn) closeBtn.onclick=function(){
+
+  if (closeBtn) closeBtn.onclick = function(){
     closeBox();
-    try{{ const u=new URL(window.location.href); u.searchParams.delete("open"); window.history.replaceState({{}}, "", u.toString()); }}catch(e){{}}
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("open");
+      window.history.replaceState({}, "", u.toString());
+    } catch(e) {}
   };
 
   function send(){
-    const val=(input && input.value || "").trim();
-    if(!val) return;
-    try {{
-      const u=new URL(window.location.href);
+    const val = (input && input.value || "").trim();
+    if (!val) return;
+    try {
+      const u = new URL(window.location.href);
       u.searchParams.set("chatq", val);
-      u.searchParams.set("open","1");   // keep panel open after reload
-      window.location.href=u.toString();
-    }} catch(e) {{}}
+      u.searchParams.set("open", "1");   // keep panel open after reload
+      window.location.href = u.toString();
+    } catch(e) {}
   }
-  if(sendBtn) sendBtn.onclick=send;
-  if(input) input.addEventListener("keydown", function(ev){
-    if(ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); send(); }
+  if (sendBtn) sendBtn.onclick = send;
+  if (input) input.addEventListener("keydown", function(ev){
+    if (ev.key === "Enter" && !ev.shiftKey){
+      ev.preventDefault();
+      send();
+    }
   });
-
 })();
 </script>
-""", unsafe_allow_html=True)
+"""
+    st.markdown(html.replace("%%BUBBLES%%", bubbles), unsafe_allow_html=True)
 
 # =========================
 # HEADER + TABS
@@ -325,7 +370,9 @@ with tabs[0]:
     else:
         country=st.sidebar.text_input("Country","United States")
 
+    # Up to 2070 as requested
     year=st.sidebar.slider("Year", 1990, 2070, 2023, 1)
+
     st.sidebar.markdown("**Population & GDP**")
     population=st.sidebar.number_input("Population", min_value=1, value=330_000_000, step=1_000_000)
     gdp=st.sidebar.number_input("GDP (billion USD)", 0.0, 40_000.0, 25_000.0, 100.0)
@@ -366,6 +413,7 @@ with tabs[0]:
 
     st.markdown('<div class="section-title">Source Mix</div>', unsafe_allow_html=True)
     source_breakdown_charts(coal, oil, gas, cement, flaring)
+
     st.markdown('<div class="section-title">Continents</div>', unsafe_allow_html=True)
     continent_stats(data)
 
@@ -442,5 +490,5 @@ with tabs[3]:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=420)
     st.plotly_chart(fig, use_container_width=True)
 
-# Always render floating chat on top
+# === Always render floating chat on top ===
 render_floating_chat()
