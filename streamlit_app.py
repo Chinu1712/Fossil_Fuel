@@ -1,3 +1,4 @@
+# streamlit_app.py
 import warnings
 from pathlib import Path
 import os
@@ -12,23 +13,118 @@ warnings.filterwarnings("ignore")
 BASE_DIR = Path(__file__).resolve().parent
 
 # =========================
-# Page + Dark theme CSS
+# Page & Global Styles (Neon Landing Look)
 # =========================
-st.set_page_config(page_title="CO2 Emission Predictor & EV Awareness", page_icon="🌍", layout="wide")
+st.set_page_config(page_title="Fossil Fuel COUNTDOWN", page_icon="🛢️", layout="wide")
+
 st.markdown("""
 <style>
-  .stApp, body { background:#0e1117; color:#fff; }
-  .main-header { font-size:2.6rem; color:#37c77f; text-align:center; margin:0 0 1rem 0; }
-  .sub-header  { font-size:1.6rem; color:#8ab4f8; margin:1rem 0 .6rem 0; }
-  .card { background:#1e2130; border:1px solid rgba(255,255,255,.06); border-radius:14px; padding:1rem 1.2rem; }
-  .accent { color:#37c77f; }
-  .pill { background:linear-gradient(90deg,#2563eb,#16a34a); height:12px; border-radius:999px; margin:.6rem 0; }
-  .btn-wide>button { width:100% !important; }
+/* ======= COLOR SYSTEM (prefers-dark first) ======= */
+:root{
+  --bg:#061a28; --fg:#cfe9ff; --muted:#8fb0c9; --card:#0b2a3f; --border:rgba(255,255,255,.06);
+  --accent:#12d7ff; --accent2:#ff2e7e; --lime:#00ffb7; --warning:#ffd166; --danger:#ff6b6b;
+  --shadow:0 10px 30px rgba(0,0,0,.35);
+}
+@media (prefers-color-scheme: light){
+  :root{
+    --bg:#f5fbff; --fg:#0b1b2b; --muted:#374b63; --card:#ffffff; --border:rgba(11,27,43,.12);
+    --accent:#0ea5e9; --accent2:#d946ef; --lime:#16a34a; --warning:#b45309; --danger:#dc2626;
+    --shadow:0 8px 24px rgba(11,27,43,.15);
+  }
+}
+
+/* ======= Base ======= */
+html, body, .stApp { background: var(--bg) !important; color: var(--fg) !important; }
+.block-container { padding-top: 1rem; }
+
+/* Star field background (subtle) */
+.stApp:before {
+  content:""; position:fixed; inset:0; pointer-events:none;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(18,215,255,.12), transparent 35%),
+    radial-gradient(circle at 80% 30%, rgba(255,46,126,.11), transparent 40%),
+    radial-gradient(circle at 60% 80%, rgba(0,255,183,.12), transparent 40%);
+  mix-blend-mode:screen;
+}
+
+/* Headings */
+.hero   { text-align:center; margin: 0 0 1.6rem; }
+.hero h1{
+  font-size: 3.2rem; letter-spacing: .05em; font-weight:800; margin:.2rem 0 0;
+  color: var(--accent); text-shadow: 0 0 10px rgba(18,215,255,.65), 0 0 25px rgba(18,215,255,.35);
+}
+.hero h2{
+  font-size: 3.0rem; letter-spacing: .25em; font-weight:900; margin:0 0 .4rem;
+  color: #78c7ff; text-shadow: 0 0 16px rgba(120,199,255,.45);
+}
+.hero p { color: var(--muted); max-width: 860px; margin: .6rem auto 0; }
+
+/* Buttons & cards */
+.card {
+  background: var(--card); border:1px solid var(--border); border-radius:16px; padding:1rem 1.2rem; 
+  box-shadow: var(--shadow);
+}
+.kpi {
+  background: linear-gradient(180deg, rgba(18,215,255,.04), rgba(18,215,255,.02));
+  border:1px solid var(--border); border-radius:18px; padding:1.0rem 1.2rem; text-align:center; 
+  box-shadow: var(--shadow);
+}
+.kpi h3 { margin:.25rem 0; font-size: 2.1rem; color: var(--fg);}
+.kpi small { color: var(--muted); }
+.kpi .big {
+  font-size: 2.4rem; font-weight:900; color:#ff2e7e; letter-spacing:.06em;
+  text-shadow:0 0 14px rgba(255,46,126,.45);
+}
+.neon-btn>button{
+  width:100%; font-weight:700; border-radius:12px;
+  background:linear-gradient(90deg, var(--accent), var(--accent2));
+  box-shadow:0 6px 20px rgba(18,215,255,.25), 0 6px 20px rgba(255,46,126,.15);
+  border:none;
+}
+
+/* Section headings */
+.section-title {
+  font-size:1.45rem; margin: 1.4rem 0 .6rem; font-weight:800; letter-spacing:.02em;
+  color:#bfe7ff; text-shadow:0 0 10px rgba(18,215,255,.35);
+}
+
+/* Plotly background match */
+.js-plotly-plot .plotly .main-svg { background: transparent !important; }
+
+/* ====== Floating Chat (moved up to avoid Streamlit icon) ====== */
+.fab{
+  position:fixed; right:22px; bottom:110px; z-index:999999;
+  width:54px; height:54px; border-radius:999px; display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(135deg, var(--accent2), var(--accent)); color:#fff; border:none;
+  box-shadow:0 10px 30px rgba(0,0,0,.35); cursor:pointer; font-size:26px;
+}
+.fab:hover{ filter:brightness(.96) }
+
+.chat-window{
+  position:fixed; right:22px; bottom:180px; z-index:999998;
+  width:min(380px, 92vw); max-height:min(70vh, 640px);
+  background:var(--card); color:var(--fg); border:1px solid var(--border); border-radius:16px;
+  overflow:hidden; box-shadow: var(--shadow); display:none;
+}
+.chat-header{ display:flex; align-items:center; justify-content:space-between; padding:.75rem 1rem; border-bottom:1px solid var(--border);}
+.chat-title{ font-weight:800; color:#bfe7ff; }
+.chat-close{ background:transparent; color:var(--muted); border:none; font-size:20px; cursor:pointer; }
+.chat-body{ padding:10px 12px; overflow:auto; max-height:50vh; }
+.bubble{ padding:.6rem .8rem; border-radius:12px; margin:.35rem 0; width:fit-content; max-width:92%; }
+.me{ background: rgba(18,215,255,.15); }
+.bot{ background: rgba(255,46,126,.15); }
+.chat-input{ display:flex; gap:.5rem; padding:.6rem; border-top:1px solid var(--border); background:var(--card); }
+.chat-input textarea{
+  flex:1; border:1px solid var(--border); border-radius:12px; padding:.55rem .7rem; background:transparent; color:var(--fg);
+  height:66px; resize:vertical;
+}
+.chat-send{ border:none; border-radius:10px; padding:.55rem .9rem; 
+  background:linear-gradient(90deg, var(--accent), var(--accent2)); color:#fff; cursor:pointer; }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================
-# Loaders
+# Data + Model loaders
 # =========================
 @st.cache_resource
 def load_model():
@@ -49,7 +145,7 @@ def load_sample_data():
         return None
 
 # =========================
-# Helpers
+# Helpers for predictor + charts
 # =========================
 def prepare_input_data(
     country, year, population, gdp, energy_per_capita,
@@ -70,7 +166,7 @@ def prepare_input_data(
     x["methane"] = methane
     x["nitrous_oxide"] = nitrous_oxide
 
-    # engineered (match training)
+    # engineered
     x["year_sq"] = year**2
     x["year_cub"] = year**3
     x["gdp_per_capita"] = x["gdp"] / max(population, 1)
@@ -85,309 +181,389 @@ def prepare_input_data(
     x["gdp_x_energy"] = x["gdp"] * energy_per_capita
     x["population_x_gdp"] = population * x["gdp"]
 
-    # country one-hot if exists
     cfeat = f"country_{country}"
     if cfeat in x:
         x[cfeat] = 1
-
     return pd.DataFrame([x])
 
-def show_source_breakdown_charts(coal, oil, gas, cement, flaring):
+def source_breakdown_charts(coal, oil, gas, cement, flaring):
     df = pd.DataFrame({
         "Source": ["Coal", "Oil", "Gas", "Cement", "Flaring"],
         "Emissions (Mt)": [coal, oil, gas, cement, flaring],
     })
     c1, c2 = st.columns(2)
     with c1:
-        pie = px.pie(df, names="Source", values="Emissions (Mt)", hole=0.35,
+        pie = px.pie(df, names="Source", values="Emissions (Mt)", hole=.35,
                      title="CO₂ Emissions by Source (input mix)")
-        pie.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#fff")
+        pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)")
         st.plotly_chart(pie, use_container_width=True)
     with c2:
-        bar = px.bar(df, x="Source", y="Emissions (Mt)", text_auto=True,
-                     title="Source Contribution (bar view)")
-        bar.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#fff")
+        bar = px.bar(df, x="Source", y="Emissions (Mt)", text_auto=True, title="Source Contribution (bar)")
+        bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)")
         st.plotly_chart(bar, use_container_width=True)
 
-def show_continent_stats(df):
-    st.markdown('<h3 class="sub-header">🌍 Continent-level CO₂ Statistics</h3>', unsafe_allow_html=True)
+def continent_stats(df):
     if df is None or "continent" not in df.columns or "co2" not in df.columns:
         st.info("Continental stats unavailable.")
         return
+    st.markdown('<div class="section-title">🌍 Continent-level CO₂ Statistics</div>', unsafe_allow_html=True)
     recent = df[(df["year"] >= 2020) & df["continent"].notna()]
     cont = (recent.groupby("continent", as_index=False)["co2"]
             .sum().sort_values("co2", ascending=False))
     fig = px.bar(cont, x="continent", y="co2", text_auto=True,
                  title="Total CO₂ Emissions by Continent (2020+)",
-                 labels={"continent": "Continent", "co2": "CO₂ Emissions (Mt)"})
-    fig.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#fff")
+                 labels={"continent":"Continent", "co2":"CO₂ Emissions (Mt)"})
+    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)")
     st.plotly_chart(fig, use_container_width=True)
 
-    needed = {"coal_co2", "oil_co2", "gas_co2", "cement_co2", "flaring_co2"}
+    needed = {"coal_co2","oil_co2","gas_co2","cement_co2","flaring_co2"}
     if needed.issubset(recent.columns):
         bysrc = (recent.groupby("continent")[list(needed)]
                  .sum().reset_index().melt("continent", var_name="Source", value_name="Mt"))
-        bysrc["Source"] = bysrc["Source"].str.replace("_co2", "", regex=False).str.title()
+        bysrc["Source"] = bysrc["Source"].str.replace("_co2","",regex=False).str.title()
         fig2 = px.bar(bysrc, x="continent", y="Mt", color="Source", barmode="stack",
-                      title="CO₂ by Source and Continent (2020+)",
-                      labels={"continent": "Continent", "Mt": "CO₂ Emissions (Mt)"})
-        fig2.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#fff")
+                      title="CO₂ by Source & Continent (2020+)",
+                      labels={"continent":"Continent","Mt":"CO₂ Emissions (Mt)"})
+        fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)")
         st.plotly_chart(fig2, use_container_width=True)
 
 # =========================
-# Gemini Chatbot (in its own tab)
+# Gemini Chat (floating) – uses st.query_params (no deprecated API)
 # =========================
-# Your key: we check secrets/env, then fall back to the value you provided.
-HARDCODED_GEMINI_KEY = "AIzaSyC8k_3PlhGYuHd7z0MXrYgMxhMAU8AEbhU"
-
-def get_gemini_key() -> str:
+def _get_gemini_key() -> str:
     key = st.secrets.get("GEMINI_API_KEY", "")
     if not key:
         key = os.getenv("GEMINI_API_KEY", "")
-    if not key:
-        key = HARDCODED_GEMINI_KEY  # fallback (you can delete this line later)
     return key
 
-def gemini_reply(user_message: str, history: list) -> str:
-    """
-    Calls Gemini 1.5 Flash via REST. History is a list of {"role": "user"|"model", "content": "..."}.
-    """
-    api_key = get_gemini_key()
+def _gemini_reply(user_message: str, history: list) -> str:
+    api_key = _get_gemini_key()
     if not api_key:
-        return "❗ Gemini API key missing."
-
+        return "❗ Gemini API key is missing. Set it in Streamlit Secrets."
     contents = []
     for m in history:
         role = "user" if m["role"] == "user" else "model"
-        contents.append({"role": role, "parts": [{"text": m["content"]}]})
-    contents.append({"role": "user", "parts": [{"text": user_message}]})
-
+        contents.append({"role": role, "parts":[{"text": m["content"]}]})
+    contents.append({"role":"user","parts":[{"text": user_message}]})
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-    headers = {"Content-Type": "application/json"}
-    params = {"key": api_key}
-    payload = {"contents": contents}
-
+    r = requests.post(url, params={"key":api_key}, headers={"Content-Type":"application/json"},
+                      json={"contents":contents}, timeout=60)
     try:
-        r = requests.post(url, headers=headers, params=params, json=payload, timeout=60)
         r.raise_for_status()
         data = r.json()
-        text = (
-            data.get("candidates", [{}])[0]
-                .get("content", {})
-                .get("parts", [{}])[0]
-                .get("text", "")
-        )
-        return text or "I couldn't generate a response."
+        return (data.get("candidates",[{}])[0]
+                .get("content",{}).get("parts",[{}])[0].get("text","")) or "No response."
     except requests.HTTPError as e:
-        return f"HTTP error from Gemini: {e} — {getattr(e, 'response', None) and e.response.text}"
+        return f"HTTP error: {e} — {getattr(e,'response',None) and e.response.text}"
     except Exception as e:
-        return f"Error contacting Gemini: {e}"
+        return f"Error: {e}"
 
-def chatbot_tab():
-    st.markdown('<h2 class="sub-header">💬 Chatbot</h2>', unsafe_allow_html=True)
+def render_floating_chat():
     if "chat" not in st.session_state:
-        st.session_state.chat = [{"role": "model",
-                                  "content": "Hi! Ask me about EVs, emissions, charts, or how to use this app."}]
-    for m in st.session_state.chat:
-        st.chat_message("assistant" if m["role"] == "model" else "user").markdown(m["content"])
+        st.session_state.chat = [{"role":"model","content":"Hi! Ask about EV savings, emissions, charts, or this app."}]
 
-    user = st.chat_input("Type your question…")
-    if user:
-        st.session_state.chat.append({"role": "user", "content": user})
-        st.chat_message("user").markdown(user)
-        with st.spinner("Thinking…"):
-            reply = gemini_reply(user, st.session_state.chat)
-        st.session_state.chat.append({"role": "model", "content": reply})
-        st.chat_message("assistant").markdown(reply)
+    qp = dict(st.query_params)
+    msg = qp.get("chatq")
+    if msg:
+        msg = msg.strip()
+        if msg:
+            st.session_state.chat.append({"role":"user","content":msg})
+            reply = _gemini_reply(msg, st.session_state.chat)
+            st.session_state.chat.append({"role":"model","content":reply})
+        st.query_params["open"] = "1"
+        if "chatq" in st.query_params: del st.query_params["chatq"]
 
-# =========================
-# Pages
-# =========================
-def show_landing_page():
-    st.markdown('<h1 class="main-header">🌍 CO2 Emission Predictor & EV Awareness</h1>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="card" style="text-align:center;">'
-        '<p style="font-size:1.1rem;margin:.2rem 0;">'
-        'Understand emissions, explore EV savings, and see continent-level patterns with clean, dark-themed visuals.'
-        '</p></div>', unsafe_allow_html=True)
+    # bubbles HTML
+    def esc(t:str)->str:
+        return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+    bubbles = "".join([f'<div class="bubble {"me" if m["role"]=="user" else "bot"}">{esc(m["content"])}</div>'
+                       for m in st.session_state.chat])
 
-    st.markdown('<h2 class="sub-header">💡 What you can do here</h2>', unsafe_allow_html=True)
+    # HTML (no f-strings around JS)
     st.markdown("""
-<div class="card">
-  <ul>
-    <li><b>Predict</b> annual CO₂ using macro + energy inputs (with engineered features).</li>
-    <li><b>Compare</b> running costs: EV vs gasoline—see your yearly & 5-year savings.</li>
-    <li><b>Visualize</b> source mix (coal/oil/gas/cement/flaring) with pie + bar charts.</li>
-    <li><b>Explore</b> continent rollups and stacked source bars for global context.</li>
-  </ul>
-  <div class="pill"></div>
-  <p style="opacity:.9"><b>Note:</b> Years far in the future are scenario extrapolations.</p>
+<button class="fab" id="fabBtn" title="Ask the assistant">💬</button>
+<div class="chat-window" id="chatWin">
+  <div class="chat-header">
+    <div class="chat-title">AI Assistant</div>
+    <button class="chat-close" id="chatClose">✕</button>
+  </div>
+  <div class="chat-body" id="chatBody">
+""", unsafe_allow_html=True)
+    st.markdown(bubbles, unsafe_allow_html=True)
+    st.markdown("""
+  </div>
+  <div class="chat-input">
+    <textarea id="chatInput" placeholder="Type your question..."></textarea>
+    <button class="chat-send" id="chatSend">Send</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const fab = document.getElementById("fabBtn");
+  const box = document.getElementById("chatWin");
+  const closeBtn = document.getElementById("chatClose");
+  const sendBtn = document.getElementById("chatSend");
+  const input = document.getElementById("chatInput");
+  if(!fab || !box) return;
+
+  function openBox(){ box.style.display = "block"; }
+  function closeBox(){ box.style.display = "none"; }
+
+  try{
+    const sp = new URLSearchParams(window.location.search);
+    if(sp.get("open")==="1"){ openBox(); }
+  }catch(e){}
+
+  fab.onclick = function(){
+    if(box.style.display==="block"){
+      closeBox();
+      try{
+        const u = new URL(window.location.href);
+        u.searchParams.delete("open");
+        window.history.replaceState({}, "", u.toString());
+      }catch(e){}
+    }else{
+      openBox();
+      try{
+        const u = new URL(window.location.href);
+        u.searchParams.set("open","1");
+        window.history.replaceState({}, "", u.toString());
+      }catch(e){}
+    }
+  };
+  if(closeBtn) closeBtn.onclick = function(){
+    closeBox();
+    try{
+      const u = new URL(window.location.href);
+      u.searchParams.delete("open");
+      window.history.replaceState({}, "", u.toString());
+    }catch(e){}
+  };
+
+  function send(){
+    const val = (input && input.value || "").trim();
+    if(!val) return;
+    try{
+      const u = new URL(window.location.href);
+      u.searchParams.set("chatq", val);
+      u.searchParams.set("open","1");
+      window.location.href = u.toString();
+    }catch(e){}
+  }
+  if(sendBtn) sendBtn.onclick = send;
+  if(input) input.addEventListener("keydown", function(ev){ if(ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); send(); }});
+})();
+</script>
+""", unsafe_allow_html=True)
+
+# =========================
+# UI Sections
+# =========================
+def hero_and_stats():
+    st.markdown("""
+<div class="hero">
+  <div class="chip"></div>
+  <h1>Fossil Fuel</h1>
+  <h2>COUNTDOWN</h2>
+  <p>Discover how fast our <b>petrol and diesel reserves</b> are running out — and how much we can extend the timeline
+     by switching to <b>EVs and renewable sources</b> today.</p>
 </div>
 """, unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🚀 Enter App", key="enter", use_container_width=True):
-        st.session_state.page = "main"
+    # Controls for countdown (like your design numbers)
+    colA, colB, colC = st.columns([1,1,1])
+    with colA:
+        reserves_tbbl = st.number_input("Global liquid reserves (Trillion barrels eq.)", 0.1, 5.0, 1.65, 0.01, key="res")
+    with colB:
+        annual_bby = st.number_input("Annual consumption (Billion barrels / year)", 10.0, 800.0, 358.0, 1.0, key="cons")
+    with colC:
+        ev_extension = st.slider("EV adoption years added (scenario)", 0, 50, 25, 1)
 
-def show_co2_predictor():
+    years_remaining = (reserves_tbbl * 1000.0) / max(annual_bby, 1e-6)
+    petrol_years = max(int(round(years_remaining)), 0)
+    diesel_years = max(int(round(years_remaining * 1.06)), 0)  # small offset to vary visuals
+
+    k1, k2, k3 = st.columns([1,1,1])
+    with k1:
+        st.markdown(f"""
+<div class="kpi">
+  <div class="big">{petrol_years} YEARS</div>
+  <small>Until Petrol Depletion</small>
+</div>
+""", unsafe_allow_html=True)
+    with k2:
+        st.markdown(f"""
+<div class="kpi">
+  <div class="big">{diesel_years} YEARS</div>
+  <small>Until Diesel Depletion</small>
+</div>
+""", unsafe_allow_html=True)
+    with k3:
+        st.markdown(f"""
+<div class="kpi">
+  <div class="big">+{ev_extension}</div>
+  <small>EV Impact Potential (years possible)</small>
+</div>
+""", unsafe_allow_html=True)
+
+    # Live project statistics grid
+    st.markdown('<div class="section-title">📡 Live Project Statistics</div>', unsafe_allow_html=True)
+    g1, g2, g3 = st.columns(3)
+    with g1:
+        st.markdown(f"""
+<div class="card"><b>Global Reserves</b><br><span style="font-size:1.6rem">{reserves_tbbl:.2f}T</span><br>
+<small>Trillion barrels (BP Statistical Review)</small></div>
+""", unsafe_allow_html=True)
+    with g2:
+        st.markdown(f"""
+<div class="card"><b>Annual Consumption</b><br><span style="font-size:1.6rem">{annual_bby:.0f}B</span><br>
+<small>Billion barrels per year</small></div>
+""", unsafe_allow_html=True)
+    with g3:
+        st.markdown(f"""
+<div class="card"><b>Time Remaining</b><br><span style="font-size:1.6rem">{years_remaining:,.1f}</span><br>
+<small>Years until depletion (simple ratio)</small></div>
+""", unsafe_allow_html=True)
+
+def predictor_section():
+    st.markdown('<div class="section-title">🔮 CO₂ Predictor</div>', unsafe_allow_html=True)
     model, scaler, features = load_model()
-    sample = load_sample_data()
-    if model is None or scaler is None or features is None:
-        st.error("Model assets not available.")
-        return
+    data = load_sample_data()
 
-    st.markdown('<h2 class="sub-header">🔮 CO₂ Predictor</h2>', unsafe_allow_html=True)
-
-    # Country selector (no chatbot here anymore)
-    st.sidebar.markdown('<h3 class="sub-header">🔧 Input Parameters</h3>', unsafe_allow_html=True)
-    if sample is not None and "country" in sample.columns:
-        countries = sorted(sample["country"].dropna().unique().tolist())
+    # Sidebar Inputs
+    if data is not None and "country" in data.columns:
+        countries = sorted(data["country"].dropna().unique().tolist())
         default_idx = countries.index("United States") if "United States" in countries else 0
         country = st.sidebar.selectbox("Country", countries, index=default_idx)
     else:
-        country = st.sidebar.text_input("Country", value="United States")
-
+        country = st.sidebar.text_input("Country", "United States")
     year = st.sidebar.slider("Year", 1990, 2070, 2023, 1)
+    st.sidebar.markdown("**Population & GDP**")
     population = st.sidebar.number_input("Population", min_value=1, value=330_000_000, step=1_000_000)
     gdp = st.sidebar.number_input("GDP (billion USD)", min_value=0.0, value=25_000.0, step=100.0)
 
     st.sidebar.markdown("**Energy & Sources**")
     energy_per_capita = st.sidebar.number_input("Energy per Capita (kWh)", 0.0, 100_000.0, 12_000.0, 100.0)
-    primary_energy_consumption = st.sidebar.number_input("Primary Energy Consumption (TWh)", 0.0, 20_000.0, 2_500.0, 10.0)
+    primary_energy_consumption = st.sidebar.number_input("Primary Energy (TWh)", 0.0, 20_000.0, 2_500.0, 10.0)
     cement_co2 = st.sidebar.number_input("Cement CO₂ (Mt)", 0.0, 2_000.0, 50.0, 1.0)
-    coal_co2 = st.sidebar.number_input("Coal CO₂ (Mt)", 0.0, 10_000.0, 1_200.0, 10.0)
-    oil_co2 = st.sidebar.number_input("Oil CO₂ (Mt)", 0.0, 10_000.0, 800.0, 10.0)
-    gas_co2 = st.sidebar.number_input("Gas CO₂ (Mt)", 0.0, 10_000.0, 600.0, 10.0)
-    flaring_co2 = st.sidebar.number_input("Flaring CO₂ (Mt)", 0.0, 1_000.0, 10.0, 1.0)
+    coal_co2   = st.sidebar.number_input("Coal CO₂ (Mt)",   0.0, 10_000.0, 1200.0, 10.0)
+    oil_co2    = st.sidebar.number_input("Oil CO₂ (Mt)",    0.0, 10_000.0, 800.0, 10.0)
+    gas_co2    = st.sidebar.number_input("Gas CO₂ (Mt)",    0.0, 10_000.0, 600.0, 10.0)
+    flaring_co2= st.sidebar.number_input("Flaring CO₂ (Mt)",0.0, 1_000.0, 10.0, 1.0)
     methane = st.sidebar.number_input("Methane (Mt CO₂e)", 0.0, 5_000.0, 300.0, 10.0)
     nitrous_oxide = st.sidebar.number_input("Nitrous Oxide (Mt CO₂e)", 0.0, 1_000.0, 100.0, 5.0)
 
-    if year > 2035:
-        st.info("ℹ️ You selected a far-future year. Treat results as scenario extrapolation.")
-
-    if st.sidebar.button("🔮 Predict CO₂ Emissions", type="primary"):
-        try:
-            X = prepare_input_data(
-                country, year, population, gdp, energy_per_capita,
-                primary_energy_consumption, cement_co2, coal_co2, oil_co2,
-                gas_co2, flaring_co2, methane, nitrous_oxide, features
-            )
-            Xs = scaler.transform(X)
-            pred = float(model.predict(Xs)[0])  # Mt
-
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.markdown(f"### 🎯 Predicted CO₂ Emissions: **{pred:,.2f} Mt**")
-            per_capita_tonnes = (pred * 1e6) / max(population, 1) / 1e3
-            vs_avg_t = 4.8
-            delta = per_capita_tonnes - vs_avg_t
-            comp = "above" if delta > 0 else "below"
-            st.markdown(f"**Per Capita:** {per_capita_tonnes:,.2f} t/person "
-                        f"({abs(delta):.1f} t {comp} global avg ~{vs_avg_t} t)")
-            st.markdown(f"**Country used for features:** {country}")
-            st.markdown("</div>", unsafe_allow_html=True)
-
-            st.markdown('<h3 class="sub-header">📈 Source Breakdown</h3>', unsafe_allow_html=True)
-            show_source_breakdown_charts(coal_co2, oil_co2, gas_co2, cement_co2, flaring_co2)
-
-            show_continent_stats(sample)
-
-            if sample is not None and {"year","country","co2"}.issubset(sample.columns):
-                recent = (sample[sample["year"] >= 2020]
-                          .groupby("country", as_index=True)["co2"]
-                          .sum().sort_values(ascending=False).head(10))
-                st.markdown('<h3 class="sub-header">🌐 Top Regions by CO₂ (2020+)</h3>', unsafe_allow_html=True)
-                fig = px.bar(
-                    x=recent.values, y=recent.index, orientation="h",
-                    title="Top 10 Regions/Groups by Total CO₂ (2020+)",
-                    labels={"x": "CO₂ Emissions (Mt)", "y": "Region/Country"},
-                    color=recent.values, color_continuous_scale="Reds"
+    if model is None or scaler is None or features is None:
+        st.warning("Model assets not available — charts below still interactive.")
+    else:
+        if st.button("🔮 Predict CO₂ Emissions", type="primary"):
+            try:
+                X = prepare_input_data(
+                    country, year, population, gdp, energy_per_capita,
+                    primary_energy_consumption, cement_co2, coal_co2, oil_co2,
+                    gas_co2, flaring_co2, methane, nitrous_oxide, features
                 )
-                fig.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#fff", height=460)
-                st.plotly_chart(fig, use_container_width=True)
+                Xs = scaler.transform(X)
+                pred = float(model.predict(Xs)[0])  # Mt
+                per_capita_t = (pred * 1e6) / max(population,1) / 1e3
+                vs_avg = 4.8
+                delta = per_capita_t - vs_avg
+                comp = "above" if delta>0 else "below"
 
-        except Exception as e:
-            st.error(f"Prediction failed: {e}")
-
-def show_ev_benefits():
-    st.markdown('<h2 class="sub-header">🚗 EV Benefits & Savings</h2>', unsafe_allow_html=True)
-    c1, c2 = st.columns([1,1])
-    with c1:
-        annual_miles = st.number_input("Annual miles driven", 5000, 30000, 12000, 1000)
-        gas_price = st.number_input("Gas price per gallon ($)", 2.0, 10.0, 3.50, 0.10)
-        car_mpg = st.number_input("Your car's MPG", 10, 80, 25, 1)
-        electricity_rate = st.number_input("Electricity rate (¢/kWh)", 4, 60, 12, 1)
-    with c2:
-        annual_gas_cost = (annual_miles / car_mpg) * gas_price
-        annual_electricity_cost = (annual_miles / 3.5) * (electricity_rate / 100.0)
-        annual_savings = annual_gas_cost - annual_electricity_cost
-        st.markdown(
-            f"""
+                st.markdown(f"""
 <div class="card">
-  <h4 class="accent">💰 Your Annual Savings</h4>
-  <p style="font-size:1.2rem;"><b>${annual_savings:,.0f}</b> /year &nbsp;|&nbsp; <b>${annual_savings*5:,.0f}</b> over 5 years</p>
-  <p>Gas: ${annual_gas_cost:,.0f} &nbsp;|&nbsp; Electric: ${annual_electricity_cost:,.0f}</p>
-</div>""",
-            unsafe_allow_html=True,
-        )
+  <b>🎯 Predicted CO₂ Emissions</b><br>
+  <span style="font-size:1.6rem">{pred:,.2f} Mt</span><br>
+  <small>Per capita: {per_capita_t:,.2f} t/person ({abs(delta):.1f} t {comp} global avg ~{vs_avg} t)</small><br>
+  <small>Country used for features: {country} | Year: {year}</small>
+</div>
+""", unsafe_allow_html=True)
+            except Exception as e:
+                st.error(f"Prediction failed: {e}")
 
-def show_environmental_impact():
-    st.markdown('<h2 class="sub-header">🌱 Environmental Impact</h2>', unsafe_allow_html=True)
+    source_breakdown_charts(coal_co2, oil_co2, gas_co2, cement_co2, flaring_co2)
+    continent_stats(data)
+
+def ev_benefits_section():
+    st.markdown('<div class="section-title">🚗 EV Benefits & Savings</div>', unsafe_allow_html=True)
+    c1, c2 = st.columns(2)
+    with c1:
+        annual_miles = st.number_input("Annual miles driven", 5000, 40000, 12000, 500)
+        gas_price = st.number_input("Gas price per gallon ($)", 2.0, 12.0, 3.50, 0.10)
+        mpg = st.number_input("Your car's MPG (gasoline)", 10, 100, 30, 1)
+        elec_rate = st.number_input("Electricity rate (¢/kWh)", 4, 80, 12, 1)
+        ev_eff = st.slider("EV efficiency (mi/kWh)", 2.5, 6.0, 3.5, 0.1)
+        maint_gas = st.slider("Yearly maintenance (Gasoline) $", 200, 2000, 900, 50)
+        maint_ev  = st.slider("Yearly maintenance (EV) $", 50, 1500, 400, 50)
+        years = st.slider("Ownership years", 1, 10, 5, 1)
+    with c2:
+        annual_gas_cost = (annual_miles / mpg) * gas_price
+        annual_elec_cost = (annual_miles / ev_eff) * (elec_rate / 100.0)
+        annual_savings = annual_gas_cost - annual_elec_cost
+        st.markdown(f"""
+<div class="kpi">
+  <h3 class="big">${annual_savings:,.0f}</h3>
+  <small>Annual savings</small><br>
+  <small>Gas fuel: ${annual_gas_cost:,.0f} | Electric: ${annual_elec_cost:,.0f}</small><br>
+  <small>Maint (Gas): ${maint_gas:,.0f} | Maint (EV): ${maint_ev:,.0f}</small><br>
+  <small>Total {years}-yr: ${years*(annual_gas_cost+maint_gas) - years*(annual_elec_cost+maint_ev):,.0f}</small>
+</div>
+""", unsafe_allow_html=True)
+    d1, d2 = st.columns(2)
+    with d1:
+        pie = px.pie(names=["Gasoline (fuel+maint)", "EV (energy+maint)"],
+                     values=[annual_gas_cost+maint_gas, annual_elec_cost+maint_ev],
+                     hole=.35, title="Annual running cost split")
+        pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)")
+        st.plotly_chart(pie, use_container_width=True)
+    with d2:
+        yrs = np.arange(1, years+1)
+        gas_total = yrs * (annual_gas_cost + maint_gas)
+        ev_total  = yrs * (annual_elec_cost + maint_ev)
+        df = pd.DataFrame({"Year": yrs, "Gasoline Total ($)": gas_total, "EV Total ($)": ev_total})
+        line = px.line(df, x="Year", y=["Gasoline Total ($)", "EV Total ($)"], markers=True,
+                       title=f"Cumulative cost over {years} years")
+        line.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)")
+        st.plotly_chart(line, use_container_width=True)
+
+def env_impact_section():
+    st.markdown('<div class="section-title">🌱 Environmental Impact</div>', unsafe_allow_html=True)
     st.markdown("""
 <div class="card">
-  <h4 class="accent">Why EVs help</h4>
+  <b>Why this matters</b>
   <ul>
-    <li><b>Zero tailpipe emissions</b> ⇒ cleaner city air (NOx/PM).</li>
-    <li><b>Grid synergy</b> ⇒ as grids add solar/wind, lifecycle CO₂ declines.</li>
-    <li><b>High efficiency</b> ⇒ electric drivetrains convert ~3× the energy to motion vs ICE.</li>
-    <li><b>Noise reduction</b> ⇒ quieter streets at low speeds.</li>
+    <li>EVs remove tailpipe emissions (NOx, PM) and cut lifecycle CO₂ as grids get cleaner.</li>
+    <li>Electric drivetrains are ~3× more energy-efficient than ICE vehicles.</li>
+    <li>Battery impacts are front-loaded; typically offset during use. Recycling & second-life are scaling fast.</li>
   </ul>
-  <div class="pill"></div>
-  <h4 class="accent">Battery considerations</h4>
+  <b>Actions you can take</b>
   <ul>
-    <li>Manufacturing CO₂ is front-loaded; typically offset during use.</li>
-    <li>Recycling & second-life storage are scaling quickly.</li>
-  </ul>
-  <div class="pill"></div>
-  <h4 class="accent">Practical actions</h4>
-  <ul>
-    <li>Prefer transit, cycling, or walking for short trips.</li>
-    <li>Pick efficient vehicles; eco-drive to cut energy use.</li>
-    <li>Charge off-peak or via renewables if available.</li>
-    <li>Advocate for public charging and clean-power procurement.</li>
+    <li>Prefer transit, cycling, or walking for short trips; eco-drive to save energy.</li>
+    <li>Choose efficient vehicles and charge off-peak or via renewables when possible.</li>
+    <li>Support public charging & clean-power procurement in your community.</li>
   </ul>
 </div>
 """, unsafe_allow_html=True)
 
-def show_ev_statistics():
-    st.markdown('<h2 class="sub-header">📊 EV Market Statistics</h2>', unsafe_allow_html=True)
+def ev_stats_section():
+    st.markdown('<div class="section-title">📊 EV Market Statistics</div>', unsafe_allow_html=True)
     years = list(range(2015, 2024))
-    global_ev_sales = [0.4, 0.7, 1.2, 2.0, 2.2, 3.1, 6.6, 10.5, 14.1]  # millions
+    global_ev_sales = [0.4, 0.7, 1.2, 2.0, 2.2, 3.1, 6.6, 10.5, 14.1]  # in millions
     fig = px.line(x=years, y=global_ev_sales, markers=True,
                   title="Global Electric Vehicle Sales (2015–2023)",
-                  labels={"x": "Year", "y": "Sales (Millions)"})
-    fig.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#fff", height=430)
+                  labels={"x":"Year","y":"Sales (Millions)"})
+    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="var(--fg)", height=430)
     st.plotly_chart(fig, use_container_width=True)
 
-def show_main_app():
-    st.markdown('<h1 class="main-header">🌍 CO2 Emission Predictor & EV Awareness</h1>', unsafe_allow_html=True)
-    tabs = st.tabs(["🔮 CO₂ Predictor", "🚗 EV Benefits", "🌱 Environmental Impact", "📊 EV Statistics", "💬 Chatbot"])
-    with tabs[0]: show_co2_predictor()
-    with tabs[1]: show_ev_benefits()
-    with tabs[2]: show_environmental_impact()
-    with tabs[3]: show_ev_statistics()
-    with tabs[4]: chatbot_tab()
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("⬅️ Back to Landing Page", key="back", use_container_width=True):
-        st.session_state.page = "landing"
-
 # =========================
-# Entrypoint
+# App Body (single-page, no separate landing)
 # =========================
-if "page" not in st.session_state:
-    st.session_state.page = "landing"
+hero_and_stats()
+predictor_section()
+ev_benefits_section()
+env_impact_section()
+ev_stats_section()
 
-if st.session_state.page == "landing":
-    show_landing_page()
-else:
-    show_main_app()
+# Always render floating chat
+render_floating_chat()
