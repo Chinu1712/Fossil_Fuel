@@ -1,5 +1,5 @@
 # streamlit_app.py
-import warnings, os
+import os, warnings
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -13,14 +13,15 @@ BASE_DIR = Path(__file__).resolve().parent
 st.set_page_config(page_title="Fossil Fuel COUNTDOWN", page_icon="🛢️", layout="wide")
 
 # =========================
-# Global Styles: neon + glass chat
+# THEME + STYLES
 # =========================
 st.markdown("""
 <style>
 :root{
   --bg:#0a1422; --fg:#e9f4ff; --muted:#93b0c8; --card:#0f2133; --card2:#132941;
-  --border:rgba(255,255,255,.08); --accent:#12d7ff; --accent2:#ff2e7e; --lime:#00ffb7;
+  --border:rgba(255,255,255,.10); --accent:#12d7ff; --accent2:#ff2e7e; --lime:#00ffb7;
   --shadow:0 18px 38px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.28);
+  --zchat: 2147483000;
 }
 @media (prefers-color-scheme: light){
   :root{
@@ -29,12 +30,20 @@ st.markdown("""
     --shadow:0 16px 30px rgba(11,27,43,.15), 0 8px 16px rgba(11,27,43,.08);
   }
 }
-
-html, body, .stApp { background: radial-gradient(1200px 800px at 75% 10%, rgba(18,215,255,.15), transparent 35%), radial-gradient(900px 600px at 20% 90%, rgba(255,46,126,.10), transparent 40%), var(--bg) !important; color: var(--fg) !important; }
-.block-container { padding-top: 0.6rem; }
+html, body, .stApp {
+  background:
+   radial-gradient(1200px 800px at 75% 10%, rgba(18,215,255,.15), transparent 35%),
+   radial-gradient(900px 600px at 20% 90%, rgba(255,46,126,.10), transparent 40%),
+   var(--bg) !important;
+  color: var(--fg) !important;
+}
+.block-container { padding-top: .6rem; }
 
 .header-wrap{ text-align:center; margin: 0 0 .6rem; }
-.header-wrap .title{ font-size: 2.4rem; font-weight: 900; letter-spacing:.04em; color: var(--accent); text-shadow:0 0 14px rgba(18,215,255,.45); }
+.header-wrap .title{
+  font-size: 2.4rem; font-weight: 900; letter-spacing:.04em;
+  color: var(--accent); text-shadow:0 0 14px rgba(18,215,255,.45);
+}
 .header-wrap .subtitle{ font-size: .95rem; color: var(--muted); max-width: 900px; margin: .25rem auto .6rem; }
 
 .section-title { font-weight: 800; font-size: 1.2rem; margin: 1.0rem 0 .4rem; color:#bfe7ff; text-shadow:0 0 10px rgba(18,215,255,.35); }
@@ -50,47 +59,50 @@ html, body, .stApp { background: radial-gradient(1200px 800px at 75% 10%, rgba(1
 .kpi .big { font-size: 1.8rem; font-weight: 900; letter-spacing:.03em; color:#ff2e7e; text-shadow:0 0 12px rgba(255,46,126,.45); }
 .kpi small { color: var(--muted); }
 
-/* Plotly bg */
+/* Plotly background */
 .js-plotly-plot .plotly .main-svg { background: transparent !important; }
 
-/* ===== Floating Chat (glass) ===== */
-.fab{
-  position:fixed; right:22px; bottom:108px; z-index:999999;
-  width:58px; height:58px; border-radius:16px; display:flex; align-items:center; justify-content:center;
+/* Floating chat */
+#ff_fab{
+  position:fixed; right:22px; bottom:22px; z-index:var(--zchat);
+  width:60px; height:60px; border-radius:16px; display:flex; align-items:center; justify-content:center;
   background: linear-gradient(145deg, #16c5ff, #ff2e7e); color:#fff; border:none;
   box-shadow: 0 16px 34px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.2); cursor:pointer; font-size:26px;
 }
-.fab:hover{ filter:brightness(.96) }
+#ff_fab:hover{ filter:brightness(.96) }
 
-.chat-window{
-  position:fixed; right:22px; bottom:180px; z-index:999998; width:min(560px, 92vw);
+#ff_chat{
+  position:fixed; right:22px; bottom:92px; z-index:calc(var(--zchat) - 1);
+  width:min(560px, 92vw);
   background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border:1px solid rgba(255,255,255,.16); border-radius:20px; overflow:hidden; display:none;
   box-shadow: var(--shadow);
 }
-.chat-header{ display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid rgba(255,255,255,.14); }
-.chat-title{ font-weight:900; color:#f3f9ff; }
-.chat-close{ background:transparent; color:#f3f9ff; opacity:.75; border:none; font-size:20px; cursor:pointer; }
-.chat-body{ padding:14px; overflow:auto; max-height:56vh; }
-.bubble{ padding:.7rem .9rem; border-radius:16px; margin:.4rem 0; width:fit-content; max-width:86%; box-shadow:0 5px 16px rgba(0,0,0,.2); }
+.ff_header{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.14); }
+.ff_title{ font-weight:900; color:#f3f9ff; }
+.ff_close{ background:transparent; color:#f3f9ff; opacity:.8; border:none; font-size:20px; cursor:pointer; }
+.ff_body{ padding:14px; overflow:auto; max-height:56vh; }
+
+.bubble{ padding:.7rem .9rem; border-radius:16px; margin:.45rem 0; width:fit-content; max-width:86%; box-shadow:0 5px 16px rgba(0,0,0,.2); }
 .me{ background: linear-gradient(145deg, rgba(22,197,255,.85), rgba(22,197,255,.55)); color:#052033; margin-left:auto; }
 .bot{ background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.16)); color:#f7fbff; border:1px solid rgba(255,255,255,.15); }
-.chat-input{ display:flex; gap:.6rem; padding:10px; border-top:1px solid rgba(255,255,255,.14); background:rgba(0,0,0,.06); }
-.chat-input textarea{
+
+.ff_input{ display:flex; gap:.6rem; padding:12px; border-top:1px solid rgba(255,255,255,.14); background:rgba(0,0,0,.06); }
+.ff_input textarea{
   flex:1; border:1px solid rgba(255,255,255,.22); border-radius:14px; padding:.6rem .75rem;
   background: rgba(255,255,255,.08); color:var(--fg); height:64px; resize:vertical;
 }
-.chat-send{
+.ff_send{
   border:none; border-radius:14px; padding:.6rem 1rem; font-weight:700; color:#0b1b2b;
   background:linear-gradient(90deg, #00ffd0, #12d7ff); cursor:pointer; box-shadow:0 10px 20px rgba(0,0,0,.25);
 }
-.chat-send:hover{ filter:brightness(.95) }
+.ff_send:hover{ filter:brightness(.95) }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================
-# Loaders
+# LOADING
 # =========================
 @st.cache_resource
 def load_model():
@@ -110,7 +122,7 @@ def load_sample_data():
         return None
 
 # =========================
-# Helpers
+# HELPERS
 # =========================
 def prepare_input_data(country, year, population, gdp, energy_per_capita,
                        primary_energy_consumption, cement_co2, coal_co2, oil_co2,
@@ -170,7 +182,9 @@ def continent_stats(df):
         fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig2, use_container_width=True)
 
-# ============ Gemini Chat ============
+# =========================
+# GEMINI CHAT BACKEND
+# =========================
 def _get_gemini_key()->str:
     key = st.secrets.get("GEMINI_API_KEY","")
     if not key: key = os.getenv("GEMINI_API_KEY","")
@@ -198,8 +212,10 @@ def _gemini_reply(user_message:str, history:list)->str:
         return f"Error: {e}"
 
 def render_floating_chat():
+    """Floating button + modal chat. High z-index; JS open/close; Enter-to-send; robust."""
     if "chat" not in st.session_state:
         st.session_state.chat=[{"role":"model","content":"Hi! Ask me about fossil fuels, EVs, or CO₂."}]
+
     qp=dict(st.query_params)
     msg=qp.get("chatq")
     if msg:
@@ -208,95 +224,85 @@ def render_floating_chat():
             st.session_state.chat.append({"role":"user","content":msg})
             reply=_gemini_reply(msg, st.session_state.chat)
             st.session_state.chat.append({"role":"model","content":reply})
+        # keep the panel open after reload
         st.query_params["open"]="1"
         if "chatq" in st.query_params: del st.query_params["chatq"]
 
     def esc(t:str)->str:
         return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+
     bubbles="".join([f'<div class="bubble {"me" if m["role"]=="user" else "bot"}">{esc(m["content"])}</div>'
                      for m in st.session_state.chat])
 
-    st.markdown("""
-<button class="fab" id="fabBtn" title="Ask">💬</button>
-<div class="chat-window" id="chatWin">
-  <div class="chat-header">
-    <div class="chat-title">Fossil Fuel Chat</div>
-    <button class="chat-close" id="chatClose">✕</button>
+    # Floating button and modal
+    st.markdown(f"""
+<button id="ff_fab" title="Ask">💬</button>
+
+<div id="ff_chat">
+  <div class="ff_header">
+    <div class="ff_title">Fossil Fuel Chat</div>
+    <button class="ff_close" id="ff_close">✕</button>
   </div>
-  <div class="chat-body" id="chatBody">
-""", unsafe_allow_html=True)
-    st.markdown(bubbles, unsafe_allow_html=True)
-    st.markdown("""
-  </div>
-  <div class="chat-input">
-    <textarea id="chatInput" placeholder="Ask me about fossil fuels, EVs, or CO₂!"></textarea>
-    <button class="chat-send" id="chatSend">Send</button>
+  <div class="ff_body" id="ff_body">{bubbles}</div>
+  <div class="ff_input">
+    <textarea id="ff_input" placeholder="Ask me about fossil fuels, EVs, or CO₂!"></textarea>
+    <button class="ff_send" id="ff_send">Send</button>
   </div>
 </div>
 
 <script>
 (function(){
-  const fab=document.getElementById("fabBtn");
-  const box=document.getElementById("chatWin");
-  const closeBtn=document.getElementById("chatClose");
-  const sendBtn=document.getElementById("chatSend");
-  const input=document.getElementById("chatInput");
-  if(!fab || !box) return;
+  const fab=document.getElementById("ff_fab");
+  const box=document.getElementById("ff_chat");
+  const closeBtn=document.getElementById("ff_close");
+  const sendBtn=document.getElementById("ff_send");
+  const input=document.getElementById("ff_input");
+  const body=document.getElementById("ff_body");
 
-  function openBox(){ box.style.display="block"; }
-  function closeBox(){ box.style.display="none"; }
+  function openBox(){ if(box){ box.style.display="block"; setTimeout(()=>{{ if(body) body.scrollTop=body.scrollHeight; }}, 50); } }
+  function closeBox(){ if(box){ box.style.display="none"; } }
 
-  try{
+  // Restore open state if ?open=1
+  try {{
     const sp=new URLSearchParams(window.location.search);
-    if(sp.get("open")==="1"){ openBox(); }
-  }catch(e){}
+    if(sp.get("open")==="1") openBox();
+  }} catch(e){{}}
 
-  fab.onclick=function(){
-    if(box.style.display==="block"){
+  if(fab) fab.onclick=function(){
+    if(box.style.display==="block"){ 
       closeBox();
-      try{
-        const u=new URL(window.location.href);
-        u.searchParams.delete("open");
-        window.history.replaceState({}, "", u.toString());
-      }catch(e){}
-    }else{
+      try{{ const u=new URL(window.location.href); u.searchParams.delete("open"); window.history.replaceState({{}}, "", u.toString()); }}catch(e){{}}
+    } else {
       openBox();
-      try{
-        const u=new URL(window.location.href);
-        u.searchParams.set("open","1");
-        window.history.replaceState({}, "", u.toString());
-      }catch(e){}
+      try{{ const u=new URL(window.location.href); u.searchParams.set("open","1"); window.history.replaceState({{}}, "", u.toString()); }}catch(e){{}}
     }
   };
   if(closeBtn) closeBtn.onclick=function(){
     closeBox();
-    try{
-      const u=new URL(window.location.href);
-      u.searchParams.delete("open");
-      window.history.replaceState({}, "", u.toString());
-    }catch(e){}
+    try{{ const u=new URL(window.location.href); u.searchParams.delete("open"); window.history.replaceState({{}}, "", u.toString()); }}catch(e){{}}
   };
 
   function send(){
     const val=(input && input.value || "").trim();
     if(!val) return;
-    try{
+    try {{
       const u=new URL(window.location.href);
       u.searchParams.set("chatq", val);
-      u.searchParams.set("open","1");
-      window.location.href=u.toString(); // reload, Python reads chatq
-    }catch(e){}
+      u.searchParams.set("open","1");   // keep panel open after reload
+      window.location.href=u.toString();
+    }} catch(e) {{}}
   }
   if(sendBtn) sendBtn.onclick=send;
   if(input) input.addEventListener("keydown", function(ev){
     if(ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); send(); }
   });
+
 })();
 </script>
 """, unsafe_allow_html=True)
 
 # =========================
-# Header & Tabs
+# HEADER + TABS
 # =========================
 st.markdown("""
 <div class="header-wrap">
@@ -312,13 +318,13 @@ with tabs[0]:
     data=load_sample_data()
     model, scaler, features = load_model()
 
-    # Sidebar inputs
     if data is not None and "country" in data.columns:
         countries=sorted(data["country"].dropna().unique().tolist())
         default_idx=countries.index("United States") if "United States" in countries else 0
         country=st.sidebar.selectbox("Country", countries, index=default_idx)
     else:
         country=st.sidebar.text_input("Country","United States")
+
     year=st.sidebar.slider("Year", 1990, 2070, 2023, 1)
     st.sidebar.markdown("**Population & GDP**")
     population=st.sidebar.number_input("Population", min_value=1, value=330_000_000, step=1_000_000)
@@ -436,5 +442,5 @@ with tabs[3]:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=420)
     st.plotly_chart(fig, use_container_width=True)
 
-# Floating Chat always on
+# Always render floating chat on top
 render_floating_chat()
