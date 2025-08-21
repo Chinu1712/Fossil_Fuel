@@ -1,6 +1,4 @@
-# streamlit_app.py  — Fossil Fuel COUNTDOWN
-# Full app: predictor, EV benefits, impact, stats + floating Gemini chat widget.
-
+# app.py — Fossil Fuel COUNTDOWN (tabs + floating chatbot)
 import os
 import warnings
 from pathlib import Path
@@ -15,11 +13,64 @@ import streamlit as st
 warnings.filterwarnings("ignore")
 BASE_DIR = Path(__file__).resolve().parent
 
-st.set_page_config(page_title="Fossil Fuel COUNTDOWN", page_icon="🛢️", layout="wide")
+# =========================
+# PROJECT CONTEXT (always used by chatbot)
+# =========================
+PROJECT_CONTEXT = """
+You are a chatbot designed to answer questions about the "Fossil Fuel Countdown: The Race to EV & Renewables" project.
+This project is an interactive dashboard that shows how fast our petrol and diesel reserves are running out and how much we can extend the timeline by switching to EVs and renewable sources today.
+
+Key Objectives:
+- Create curiosity: Show how limited fossil fuel reserves are.
+- Educate: Demonstrate the impact of daily fuel consumption on depletion timelines.
+- Inspire: Visualize how EV adoption and renewable integration delay extinction of reserves.
+- Engage: Let visitors simulate their own "switch scenarios" and see instant results.
+
+What the Dashboard Shows:
+- Large screen dashboard with a world map/country view showing known petrol/diesel reserves.
+- Countdown timers for "Petrol runs out in X years" and "Diesel runs out in Y years" based on current consumption rates.
+- A graph of reserves vs. time (business as usual vs. EV adoption).
+- Interactive slider or buttons: "Adopt EVs faster" (10%, 25%, 50% per year) and "Add renewables" (% of grid energy from clean sources).
+- Instant visual change in: extended reserve lifespan (years) and CO₂ reduction over time.
+- Curiosity facts (e.g., "At current rates, the world uses enough oil in 1 day to fill 8,000 Olympic pools").
+- Call to action: "If every 5th vehicle goes electric, reserves last X years longer."
+
+Core Data Used (Simplified for Demo):
+- Global oil reserves: ~1.65 trillion barrels.
+- Annual global oil consumption: ~35 billion barrels/year.
+- CO₂ emissions per litre: Petrol: ~2.31 kg CO₂/litre, Diesel: ~2.68 kg CO₂/litre.
+- EV energy consumption & renewable adoption scenarios are simulated.
+
+How the App Works (4 Steps):
+1. Initial Calculation (Business As Usual): Years until depletion = Total reserves / Annual consumption. Shows timeline graph.
+2. Scenario Simulation: Sliders adjust EV adoption rate/year and renewable share growth/year. Formula reduces fossil fuel consumption, new depletion dates appear instantly.
+3. CO₂ Impact Visualization: CO₂ avoided per year from reduced fuel burning, shown as equivalents (e.g., "X million trees planted").
+4. Comparison View: "If we do nothing" vs. "If we switch now" side-by-side bars.
+
+Engagement Flow:
+1. Visitor sees scary "Fossil Fuels Will Run Out In..." countdown.
+2. You invite them to adjust EV adoption/renewable sliders.
+3. They watch the depletion date move further into the future.
+4. Show the CO₂ savings meter shoot up.
+5. End with "Every small switch counts... what will you switch today?"
+
+Visualization Ideas:
+- Dual Countdown Timers (Petrol, Diesel: large, bold, red turning green).
+- Curved depletion graphs (before vs. after).
+- CO₂ Cloud Animation (shrinks as cleaner options are chosen).
+- World map heatmap (top consumers in red, turning greener).
+- Infographic-style callouts: "One EV saves ~X litres of fuel/year", "At 50% EV adoption, we delay petrol extinction by 15 years."
+
+Identity:
+If a user asks "who are you?" reply:
+"I’m a chatbot here to assist you with the Fossil Fuel Countdown project — ask me anything about the experience, EVs, emissions, or what the charts mean."
+"""
 
 # =========================
-# THEME & STYLES
+# PAGE CONFIG + THEME
 # =========================
+st.set_page_config(page_title="Fossil Fuel COUNTDOWN", page_icon="🛢️", layout="wide")
+
 st.markdown("""
 <style>
 :root{
@@ -67,42 +118,28 @@ html, body, .stApp {
 /* Plotly background */
 .js-plotly-plot .plotly .main-svg { background: transparent !important; }
 
-/* Floating chat */
-#ff_fab{
+/* Floating chat FAB and panel */
+#chat_fab {
   position:fixed; right:22px; bottom:22px; z-index:var(--zchat);
   width:60px; height:60px; border-radius:16px; display:flex; align-items:center; justify-content:center;
   background: linear-gradient(145deg, #16c5ff, #ff2e7e); color:#fff; border:none;
   box-shadow: 0 16px 34px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.2); cursor:pointer; font-size:26px;
 }
-#ff_fab:hover{ filter:brightness(.96) }
-
-#ff_chat{
+#chat_panel {
   position:fixed; right:22px; bottom:92px; z-index:calc(var(--zchat) - 1);
   width:min(560px, 92vw);
   background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  border:1px solid rgba(255,255,255,.16); border-radius:20px; overflow:hidden; display:none;
+  border:1px solid rgba(255,255,255,.16); border-radius:20px; overflow:hidden;
   box-shadow: var(--shadow);
 }
 .ff_header{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.14); }
 .ff_title{ font-weight:900; color:#f3f9ff; }
-.ff_close{ background:transparent; color:#f3f9ff; opacity:.8; border:none; font-size:20px; cursor:pointer; }
+.ff_close{ color:#f3f9ff; text-decoration:none; font-size:20px; opacity:.85; }
 .ff_body{ padding:14px; overflow:auto; max-height:56vh; }
-
 .bubble{ padding:.7rem .9rem; border-radius:16px; margin:.45rem 0; width:fit-content; max-width:86%; box-shadow:0 5px 16px rgba(0,0,0,.2); }
 .me{ background: linear-gradient(145deg, rgba(22,197,255,.85), rgba(22,197,255,.55)); color:#052033; margin-left:auto; }
 .bot{ background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.16)); color:#f7fbff; border:1px solid rgba(255,255,255,.15); }
-
-.ff_input{ display:flex; gap:.6rem; padding:12px; border-top:1px solid rgba(255,255,255,.14); background:rgba(0,0,0,.06); }
-.ff_input textarea{
-  flex:1; border:1px solid rgba(255,255,255,.22); border-radius:14px; padding:.6rem .75rem;
-  background: rgba(255,255,255,.08); color:var(--fg); height:64px; resize:vertical;
-}
-.ff_send{
-  border:none; border-radius:14px; padding:.6rem 1rem; font-weight:700; color:#0b1b2b;
-  background:linear-gradient(90deg, #00ffd0, #12d7ff); cursor:pointer; box-shadow:0 10px 20px rgba(0,0,0,.25);
-}
-.ff_send:hover{ filter:brightness(.95) }
 </style>
 """, unsafe_allow_html=True)
 
@@ -169,30 +206,8 @@ def source_breakdown_charts(coal, oil, gas, cement, flaring):
         bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(bar, use_container_width=True)
 
-def continent_stats(df):
-    if df is None or not {"continent","co2"}.issubset(df.columns):
-        st.info("Continental data unavailable.")
-        return
-    recent = df[(df["year"]>=2020) & df["continent"].notna()]
-    cont = recent.groupby("continent", as_index=False)["co2"].sum().sort_values("co2", ascending=False)
-    fig = px.bar(cont, x="continent", y="co2", text_auto=True,
-                 title="Total CO₂ by Continent (2020+)",
-                 labels={"continent":"Continent","co2":"CO₂ Emissions (Mt)"})
-    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig, use_container_width=True)
-
-    needed={"coal_co2","oil_co2","gas_co2","cement_co2","flaring_co2"}
-    if needed.issubset(recent.columns):
-        bysrc=(recent.groupby("continent")[list(needed)]
-               .sum().reset_index().melt("continent", var_name="Source", value_name="Mt"))
-        bysrc["Source"]=bysrc["Source"].str.replace("_co2","",regex=False).str.title()
-        fig2=px.bar(bysrc, x="continent", y="Mt", color="Source", barmode="stack",
-                    title="CO₂ by Source & Continent (2020+)", labels={"Mt":"CO₂ Emissions (Mt)"})
-        fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig2, use_container_width=True)
-
 # =========================
-# GEMINI CHAT BACKEND
+# GEMINI (REST) — use Secrets env
 # =========================
 def _get_gemini_key()->str:
     key = st.secrets.get("GEMINI_API_KEY","")
@@ -203,15 +218,18 @@ def _gemini_reply(user_message:str, history:list)->str:
     key=_get_gemini_key()
     if not key:
         return "❗ Gemini API key is missing. Add GEMINI_API_KEY in Streamlit Secrets."
-    contents=[]
+    # Build contents with context + turns
+    preface = {"role":"user","parts":[{"text":PROJECT_CONTEXT}]}
+    contents=[preface]
     for m in history:
         role = "user" if m["role"]=="user" else "model"
         contents.append({"role":role,"parts":[{"text":m["content"]}]})
     contents.append({"role":"user","parts":[{"text":user_message}]})
+
     url="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-    r=requests.post(url, params={"key":key}, headers={"Content-Type":"application/json"},
-                    json={"contents":contents}, timeout=60)
     try:
+        r=requests.post(url, params={"key":key}, headers={"Content-Type":"application/json"},
+                        json={"contents":contents}, timeout=60)
         r.raise_for_status()
         data=r.json()
         return data.get("candidates",[{}])[0].get("content",{}).get("parts",[{}])[0].get("text","") or "No response."
@@ -220,115 +238,55 @@ def _gemini_reply(user_message:str, history:list)->str:
     except Exception as e:
         return f"Error: {e}"
 
+# =========================
+# FLOATING CHAT (Open/Close via query param; send via st.chat_input)
+# =========================
 def render_floating_chat():
-    """
-    Floating chat using ONLY HTML+CSS (no JS), so it works in Streamlit.
-    The Send button posts via GET (?chatq=...&open=1). We read that above
-    and add model/user turns accordingly.
-    """
-    # Ensure chat state exists
+    # session state
     if "chat" not in st.session_state:
         st.session_state.chat = [
-            {"role": "model", "content": "Hi! Ask me about fossil fuels, EVs, or CO₂."}
+            {"role": "model", "content": "Hi! I’m a chatbot here to assist you about the Fossil Fuel Countdown project. Ask anything about EVs, emissions, or the charts."}
         ]
 
-    # Consume query params (done on each run)
-    qp = dict(st.query_params)
-    msg = (qp.get("chatq") or "").strip()
-    if msg:
-        st.session_state.chat.append({"role": "user", "content": msg})
-        reply = _gemini_reply(msg, st.session_state.chat)
-        st.session_state.chat.append({"role": "model", "content": reply})
-        # keep open after reload
-        st.query_params["open"] = "1"
-        # clear the text so it doesn't resend on next run
-        if "chatq" in st.query_params:
-            del st.query_params["chatq"]
+    # open/close from query params (open=1 keeps it open)
+    chat_open = st.query_params.get("open") == "1"
 
-    # Build bubbles safely
-    def esc(t: str) -> str:
-        return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    bubbles = "".join(
-        '<div class="bubble {cls}">{txt}</div>'.format(
-            cls=("me" if m["role"] == "user" else "bot"), txt=esc(m["content"])
-        )
-        for m in st.session_state.chat
+    # FAB (link toggles open=1)
+    st.markdown(
+        '<a id="chat_fab" href="?open=1" title="Chat">💬</a>',
+        unsafe_allow_html=True
     )
 
-    # open=1 -> checkbox "checked" (no JS needed)
-    checked_attr = " checked" if (st.query_params.get("open") == "1") else ""
-
-    html = f"""
-<style>
-/* Float container uses only CSS */
-#ff_toggle {{ display:none; }}
-#ff_fab {{
-  position:fixed; right:22px; bottom:22px; z-index:2147483000;
-  width:60px; height:60px; border-radius:16px; display:flex; align-items:center; justify-content:center;
-  background: linear-gradient(145deg, #16c5ff, #ff2e7e); color:#fff; border:none;
-  box-shadow: 0 16px 34px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.2); cursor:pointer; font-size:26px;
-}}
-#ff_chat {{
-  position:fixed; right:22px; bottom:92px; z-index:2147482999;
-  width:min(560px, 92vw);
-  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  border:1px solid rgba(255,255,255,.16); border-radius:20px; overflow:hidden; display:none;
-  box-shadow: 0 18px 38px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.28);
-}}
-/* Toggle open/close with the hidden checkbox */
-#ff_toggle:checked ~ #ff_chat {{ display:block; }}
-
-.ff_header{{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.14); }}
-.ff_title{{ font-weight:900; color:#f3f9ff; }}
-.ff_close{{ cursor:pointer; color:#f3f9ff; background:transparent; border:none; font-size:20px; opacity:.85; }}
-
-.ff_body{{ padding:14px; overflow:auto; max-height:56vh; }}
-.bubble{{ padding:.7rem .9rem; border-radius:16px; margin:.45rem 0; width:fit-content; max-width:86%; box-shadow:0 5px 16px rgba(0,0,0,.2); }}
-.me{{ background: linear-gradient(145deg, rgba(22,197,255,.85), rgba(22,197,255,.55)); color:#052033; margin-left:auto; }}
-.bot{{ background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.16)); color:#f7fbff; border:1px solid rgba(255,255,255,.15); }}
-
-.ff_input{{ display:flex; gap:.6rem; padding:12px; border-top:1px solid rgba(255,255,255,.14); background:rgba(0,0,0,.06); }}
-.ff_input textarea{{
-  flex:1; border:1px solid rgba(255,255,255,.22); border-radius:14px; padding:.6rem .75rem;
-  background: rgba(255,255,255,.08); color:inherit; height:64px; resize:vertical;
-}}
-.ff_send{{
-  border:none; border-radius:14px; padding:.6rem 1rem; font-weight:700; color:#0b1b2b;
-  background:linear-gradient(90deg, #00ffd0, #12d7ff); cursor:pointer; box-shadow:0 10px 20px rgba(0,0,0,.25);
-}}
-/* Light theme readability */
-@media (prefers-color-scheme: light){{
-  .bot{{ color:#0b1b2b; }}
-}}
-</style>
-
-<!-- Hidden checkbox controls visibility -->
-<input type="checkbox" id="ff_toggle"{checked_attr} />
-
-<!-- Floating button toggles the checkbox -->
-<label id="ff_fab" for="ff_toggle" title="Chat">💬</label>
-
-<!-- Chat box -->
-<div id="ff_chat" role="dialog" aria-label="Fossil Fuel Chat" aria-modal="true">
+    # Panel
+    if chat_open:
+        # header + close (link sets open=0)
+        st.markdown("""
+<div id="chat_panel" role="dialog" aria-label="Fossil Fuel Chat" aria-modal="true">
   <div class="ff_header">
     <div class="ff_title">Fossil Fuel Chat</div>
-    <!-- Clicking this label unchecks the checkbox -->
-    <label class="ff_close" for="ff_toggle" title="Close">✕</label>
+    <a class="ff_close" href="?open=0" title="Close">✕</a>
   </div>
+  <div class="ff_body">
+""", unsafe_allow_html=True)
 
-  <div class="ff_body">{bubbles}</div>
+        # message bubbles
+        def esc(t: str) -> str:
+            return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+        for m in st.session_state.chat:
+            cls = "me" if m["role"]=="user" else "bot"
+            st.markdown(f'<div class="bubble {cls}">{esc(m["content"])}</div>', unsafe_allow_html=True)
 
-  <!-- GET form reloads the page with ?chatq=...&open=1 -->
-  <form class="ff_input" method="get">
-    <textarea name="chatq" placeholder="Ask me about fossil fuels, EVs, or CO₂!"></textarea>
-    <input type="hidden" name="open" value="1" />
-    <button class="ff_send" type="submit">Send</button>
-  </form>
-</div>
-"""
-    st.markdown(html, unsafe_allow_html=True)
+        # chat input (no page reload)
+        prompt = st.chat_input("Ask about fossil fuels, EVs, or CO₂…")
+        if prompt:
+            st.session_state.chat.append({"role":"user","content":prompt})
+            reply = _gemini_reply(prompt, st.session_state.chat)
+            st.session_state.chat.append({"role":"model","content":reply})
+            # Rerun to show new message without closing panel
+            st.query_params["open"] = "1"
+            st.rerun()
 
+        st.markdown("</div></div>", unsafe_allow_html=True)
 
 # =========================
 # HEADER + TABS
@@ -354,7 +312,7 @@ with tabs[0]:
     else:
         country=st.sidebar.text_input("Country","United States")
 
-    # Up to 2070 as requested
+    # Up to 2070
     year=st.sidebar.slider("Year", 1990, 2070, 2023, 1)
 
     st.sidebar.markdown("**Population & GDP**")
@@ -374,7 +332,7 @@ with tabs[0]:
 
     st.markdown('<div class="section-title">Prediction</div>', unsafe_allow_html=True)
     if model is None or scaler is None or features is None:
-        st.warning("Model files not found; charts below still work.")
+        st.warning("Prediction model files not found; charts below still work.")
     else:
         if st.button("🔮 Predict CO₂ Emissions", type="primary"):
             try:
@@ -397,9 +355,6 @@ with tabs[0]:
 
     st.markdown('<div class="section-title">Source Mix</div>', unsafe_allow_html=True)
     source_breakdown_charts(coal, oil, gas, cement, flaring)
-
-    st.markdown('<div class="section-title">Continents</div>', unsafe_allow_html=True)
-    continent_stats(data)
 
 # ============ EV Benefits ============
 with tabs[1]:
@@ -474,5 +429,5 @@ with tabs[3]:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=420)
     st.plotly_chart(fig, use_container_width=True)
 
-# === Always render floating chat on top ===
+# === Floating chatbot (on all tabs) ===
 render_floating_chat()
