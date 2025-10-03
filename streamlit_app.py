@@ -1,4 +1,5 @@
 # app.py — Fossil Fuel COUNTDOWN (no rounded pill, no continents) — HEADER FIXED
+
 import os
 import warnings
 from pathlib import Path
@@ -28,14 +29,10 @@ st.markdown("""
   --border:rgba(255,255,255,.10); --accent:#12d7ff; --accent2:#ff2e7e;
   --shadow:0 18px 38px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.28);
 }
-
-/* Light mode palette */
 @media (prefers-color-scheme: light){
   :root{ --bg:#f7fbff; --fg:#0b1b2b; --muted:#3c4e65; --card:#ffffff; --card2:#ffffff;
          --border:rgba(11,27,43,.12); --accent:#0ea5e9; --accent2:#d946ef; }
 }
-
-/* Background & base text */
 html, body, .stApp {
   background:
    radial-gradient(1200px 800px at 75% 10%, rgba(18,215,255,.15), transparent 35%),
@@ -43,25 +40,18 @@ html, body, .stApp {
    var(--bg) !important;
   color: var(--fg) !important;
 }
-
-/* === STREAMLIT HEADER / TOP SPACING FIX === */
 .stApp > header { background: transparent !important; }
 .main .block-container { padding-top: calc(2.6rem + env(safe-area-inset-top)) !important; }
 @media (max-width: 768px){
   .main .block-container { padding-top: calc(3.2rem + env(safe-area-inset-top)) !important; }
 }
-
-/* Header */
 .header-wrap{ text-align:center; margin: .25rem 0 .6rem; }
 .header-wrap .title{
   font-size: 2.4rem; font-weight: 900; letter-spacing:.04em;
   color: var(--accent); text-shadow:0 0 14px rgba(18,215,255,.45);
 }
-@media (max-width: 680px){
-  .header-wrap .title{ font-size: 1.9rem; }
-}
+@media (max-width: 680px){ .header-wrap .title{ font-size: 1.9rem; } }
 .header-wrap .subtitle{ font-size: .95rem; color: var(--muted); max-width: 980px; margin: .25rem auto .6rem; }
-
 .section-title { font-weight: 800; font-size: 1.2rem; margin: 1.0rem 0 .4rem; color:#bfe7ff; text-shadow:0 0 10px rgba(18,215,255,.35); }
 .card {
   background: linear-gradient(180deg, rgba(18,215,255,.05), rgba(18,215,255,.02)), var(--card);
@@ -73,11 +63,7 @@ html, body, .stApp {
 }
 .kpi .big { font-size: 1.2rem; font-weight: 900; letter-spacing:.02em; color:#ffb703; text-shadow:0 0 10px rgba(255,183,3,.35); }
 .kpi small { color: var(--muted); }
-
-/* Plotly */
 .js-plotly-plot .plotly .main-svg { background: transparent !important; }
-
-/* Chatbot (flatten inputs/buttons) */
 .chatwrap { max-width: 900px; margin: 0 auto; }
 .chatcard {
   background: radial-gradient(200px 140px at 15% 0%, rgba(255,255,255,.08), transparent 42%),
@@ -94,8 +80,6 @@ html, body, .stApp {
 .bubble.user { margin-left: auto; background: linear-gradient(145deg, #1db2ff, #0ea5e9); color: #052033; font-weight: 600; }
 .bubble.bot  { background: linear-gradient(145deg, rgba(255,255,255,.30), rgba(255,255,255,.18));
                border: 1px solid rgba(255,255,255,.16); color: #f6fbff; }
-
-/* == Kill the “pill” look == */
 .chatwrap .stTextInput > div > div { border-radius: 6px !important; }
 .chatwrap .stTextInput input {
   border-radius: 6px !important;
@@ -173,23 +157,38 @@ def source_breakdown_charts(coal, oil, gas, cement, flaring):
         bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(bar, use_container_width=True)
 
-# ---------- GEMINI ----------
-DEFAULT_GEMINI_MODEL = "gemini-1.5-flash-latest"
+# ---------- GEMINI (robust, with fallbacks) ----------
+DEFAULT_GEMINI_API_VERSION = "v1"
+PREFERRED_MODELS = [
+    "gemini-1.5-flash-8b",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-1.0-pro",
+]
 
 def _get_gemini_key() -> str:
-    key = st.secrets.get("GEMINI_API_KEY", "")
-    if not key:
-        key = os.getenv("GEMINI_API_KEY", "")
-    return key
+    return st.secrets.get("GEMINI_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
+
+def _get_gemini_version() -> str:
+    return (st.secrets.get("GEMINI_API_VERSION", DEFAULT_GEMINI_API_VERSION) or "").strip()
 
 def _get_gemini_model() -> str:
-    return st.secrets.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+    return (st.secrets.get("GEMINI_MODEL") or os.getenv("GEMINI_MODEL", "")).strip()
+
+def _call_gemini(version: str, model: str, contents: list, key: str) -> requests.Response:
+    url = f"https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent"
+    return requests.post(
+        url,
+        params={"key": key},
+        headers={"Content-Type": "application/json"},
+        json={"contents": contents},
+        timeout=60,
+    )
 
 def _gemini_reply(user_message: str, history: list) -> str:
     key = _get_gemini_key()
     if not key:
         return "❗ Gemini API key is missing. Add GEMINI_API_KEY in Streamlit Secrets."
-
     if user_message.strip().lower() in {"who are you", "who are you?", "who r u", "who r u?"}:
         return ("I'm a chatbot here to assist you with the Fossil Fuel Countdown project — "
                 "ask me anything about the experience, EVs, emissions, or what the charts mean.")
@@ -201,35 +200,43 @@ def _gemini_reply(user_message: str, history: list) -> str:
         contents.append({"role": role, "parts": [{"text": m["content"]}]})
     contents.append({"role": "user", "parts": [{"text": user_message}]})
 
-    model = _get_gemini_model()
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    version = _get_gemini_version() or DEFAULT_GEMINI_API_VERSION
+    override_model = _get_gemini_model()
+    model_candidates = [override_model] if override_model else PREFERRED_MODELS
 
-    try:
-        r = requests.post(
-            url,
-            params={"key": key},
-            headers={"Content-Type": "application/json"},
-            json={"contents": contents},
-            timeout=60,
-        )
-        r.raise_for_status()
-        data = r.json()
+    tried = []
+    for v in [version, ("v1beta" if version != "v1beta" else "v1")]:
+        for m in model_candidates:
+            if not m:
+                continue
+            tried.append(f"{v}/{m}")
+            try:
+                r = _call_gemini(v, m, contents, key)
+                if r.status_code == 404:
+                    continue
+                r.raise_for_status()
+                data = r.json()
+                cands = data.get("candidates") or []
+                if cands and isinstance(cands, list):
+                    content = cands[0].get("content") or {}
+                    parts = content.get("parts") or []
+                    if parts and isinstance(parts, list):
+                        txt = parts[0].get("text", "")
+                        if isinstance(txt, str) and txt.strip():
+                            return txt.strip()
+                return "No response."
+            except requests.HTTPError as e:
+                if getattr(e, "response", None) and e.response.status_code == 404:
+                    continue
+                body = getattr(e, "response", None)
+                return f"HTTP error: {e} – {(body.text if body is not None else '')}"
+            except Exception as e:
+                return f"Error: {e}"
 
-        # Robust extraction
-        cands = data.get("candidates") or []
-        if cands and isinstance(cands, list):
-            content = cands[0].get("content") or {}
-            parts = content.get("parts") or []
-            if parts and isinstance(parts, list):
-                text = parts[0].get("text", "")
-                if isinstance(text, str) and text.strip():
-                    return text.strip()
-        return "No response."
-    except requests.HTTPError as e:
-        body = getattr(e, "response", None)
-        return f"HTTP error: {e} – {(body.text if body is not None else '')}"
-    except Exception as e:
-        return f"Error: {e}"
+    return ("Model not available for your key/region. Tried: "
+            + ", ".join(tried)
+            + ". Set secrets `GEMINI_API_VERSION` (v1 or v1beta) and "
+              "`GEMINI_MODEL` (e.g., gemini-1.5-flash-8b).")
 
 # ---------- HEADER ----------
 st.markdown("""
