@@ -201,7 +201,7 @@ def _gemini_reply(user_message:str, history:list)->str:
         role = "user" if m["role"]=="user" else "model"
         contents.append({"role":role,"parts":[{"text":m["content"]}]} )
     contents.append({"role":"user","parts":[{"text":user_message}]} )
-    url="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+   url="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
     try:
         r=requests.post(url, params={"key":key}, headers={"Content-Type":"application/json"},
                         json={"contents":contents}, timeout=60)
