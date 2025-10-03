@@ -1,4 +1,4 @@
-# app.py — Fossil Fuel COUNTDOWN (auto-detects Gemini model, no continents, header fixed)
+# app.py — Fossil Fuel COUNTDOWN (model picker built-in)
 
 import os
 import warnings
@@ -21,14 +21,12 @@ Identity (for “who are you?”): "I'm a chatbot here to assist you with the Fo
 
 st.set_page_config(page_title="Fossil Fuel COUNTDOWN", page_icon="🛢️", layout="wide")
 
-# ---------- THEME & CHATBOT UI (flatten inputs) ----------
+# ---------- THEME ----------
 st.markdown("""
 <style>
-:root{
-  --bg:#0a1422; --fg:#e9f4ff; --muted:#93b0c8; --card:#0f2133; --card2:#132941;
-  --border:rgba(255,255,255,.10); --accent:#12d7ff; --accent2:#ff2e7e;
-  --shadow:0 18px 38px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.28);
-}
+:root{ --bg:#0a1422; --fg:#e9f4ff; --muted:#93b0c8; --card:#0f2133; --card2:#132941;
+       --border:rgba(255,255,255,.10); --accent:#12d7ff; --accent2:#ff2e7e;
+       --shadow:0 18px 38px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.28); }
 @media (prefers-color-scheme: light){
   :root{ --bg:#f7fbff; --fg:#0b1b2b; --muted:#3c4e65; --card:#ffffff; --card2:#ffffff;
          --border:rgba(11,27,43,.12); --accent:#0ea5e9; --accent2:#d946ef; }
@@ -37,62 +35,49 @@ html, body, .stApp {
   background:
    radial-gradient(1200px 800px at 75% 10%, rgba(18,215,255,.15), transparent 35%),
    radial-gradient(900px 600px at 20% 90%, rgba(255,46,126,.10), transparent 40%),
-   var(--bg) !important;
-  color: var(--fg) !important;
+   var(--bg) !important; color: var(--fg) !important;
 }
 .stApp > header { background: transparent !important; }
 .main .block-container { padding-top: calc(2.6rem + env(safe-area-inset-top)) !important; }
-@media (max-width: 768px){ .main .block-container { padding-top: calc(3.2rem + env(safe-area-inset-top)) !important; } }
-.header-wrap{ text-align:center; margin: .25rem 0 .6rem; }
-.header-wrap .title{
-  font-size: 2.4rem; font-weight: 900; letter-spacing:.04em;
-  color: var(--accent); text-shadow:0 0 14px rgba(18,215,255,.45);
+@media (max-width: 768px){
+  .main .block-container { padding-top: calc(3.2rem + env(safe-area-inset-top)) !important; }
 }
-@media (max-width: 680px){ .header-wrap .title{ font-size: 1.9rem; } }
-.header-wrap .subtitle{ font-size: .95rem; color: var(--muted); max-width: 980px; margin: .25rem auto .6rem; }
-.section-title { font-weight: 800; font-size: 1.2rem; margin: 1.0rem 0 .4rem; color:#bfe7ff; text-shadow:0 0 10px rgba(18,215,255,.35); }
-.card {
-  background: linear-gradient(180deg, rgba(18,215,255,.05), rgba(18,215,255,.02)), var(--card);
-  border:1px solid var(--border); border-radius:16px; padding:1rem 1.1rem; box-shadow: var(--shadow);
-}
-.kpi{
-  background: linear-gradient(180deg, rgba(255,46,126,.06), rgba(18,215,255,.05)), var(--card2);
-  border:1px solid var(--border); border-radius:18px; padding:1rem; text-align:center; box-shadow: var(--shadow);
-}
-.kpi .big { font-size: 1.2rem; font-weight: 900; letter-spacing:.02em; color:#ffb703; text-shadow:0 0 10px rgba(255,183,3,.35); }
-.kpi small { color: var(--muted); }
-.js-plotly-plot .plotly .main-svg { background: transparent !important; }
-.chatwrap { max-width: 900px; margin: 0 auto; }
-.chatcard {
-  background: radial-gradient(200px 140px at 15% 0%, rgba(255,255,255,.08), transparent 42%),
-              linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
-  border: 1px solid rgba(255,255,255,.18);
-  border-radius: 18px; box-shadow: var(--shadow);
-  padding: 18px 18px 12px;
-}
-.chatstream { max-height: 58vh; overflow-y: auto; padding: 6px 6px 2px; }
-.bubble {
-  padding: 12px 16px; border-radius: 14px; margin: 10px 6px; width: fit-content; max-width: 85%;
-  box-shadow: 0 10px 25px rgba(0,0,0,.25); word-wrap: break-word;
-}
-.bubble.user { margin-left: auto; background: linear-gradient(145deg, #1db2ff, #0ea5e9); color: #052033; font-weight: 600; }
-.bubble.bot  { background: linear-gradient(145deg, rgba(255,255,255,.30), rgba(255,255,255,.18));
-               border: 1px solid rgba(255,255,255,.16); color: #f6fbff; }
-.chatwrap .stTextInput > div > div { border-radius: 6px !important; }
-.chatwrap .stTextInput input {
-  border-radius: 6px !important;
-  background: rgba(255,255,255,.08) !important;
-  border: 1px solid rgba(255,255,255,.25) !important;
-  box-shadow: none !important;
-}
+.header-wrap{ text-align:center; margin:.25rem 0 .6rem; }
+.header-wrap .title{ font-size:2.4rem; font-weight:900; letter-spacing:.04em;
+  color:var(--accent); text-shadow:0 0 14px rgba(18,215,255,.45); }
+@media (max-width: 680px){ .header-wrap .title{ font-size:1.9rem; } }
+.header-wrap .subtitle{ font-size:.95rem; color:var(--muted); max-width:980px; margin:.25rem auto .6rem; }
+
+.section-title{ font-weight:800; font-size:1.2rem; margin:1.0rem 0 .4rem; color:#bfe7ff;
+  text-shadow:0 0 10px rgba(18,215,255,.35); }
+.card{ background:linear-gradient(180deg, rgba(18,215,255,.05), rgba(18,215,255,.02)), var(--card);
+  border:1px solid var(--border); border-radius:16px; padding:1rem 1.1rem; box-shadow:var(--shadow); }
+.kpi{ background:linear-gradient(180deg, rgba(255,46,126,.06), rgba(18,215,255,.05)), var(--card2);
+  border:1px solid var(--border); border-radius:18px; padding:1rem; text-align:center; box-shadow:var(--shadow); }
+.kpi .big{ font-size:1.2rem; font-weight:900; letter-spacing:.02em; color:#ffb703;
+  text-shadow:0 0 10px rgba(255,183,3,.35); }
+.kpi small{ color:var(--muted); }
+.js-plotly-plot .plotly .main-svg{ background:transparent !important; }
+.chatwrap{ max-width:900px; margin:0 auto; }
+.chatcard{ background: radial-gradient(200px 140px at 15% 0%, rgba(255,255,255,.08), transparent 42%),
+                     linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+  border:1px solid rgba(255,255,255,.18); border-radius:18px; box-shadow:var(--shadow);
+  padding:18px 18px 12px; }
+.chatstream{ max-height:58vh; overflow-y:auto; padding:6px 6px 2px; }
+.bubble{ padding:12px 16px; border-radius:14px; margin:10px 6px; width:fit-content; max-width:85%;
+  box-shadow:0 10px 25px rgba(0,0,0,.25); word-wrap:break-word; }
+.bubble.user{ margin-left:auto; background:linear-gradient(145deg, #1db2ff, #0ea5e9); color:#052033; font-weight:600; }
+.bubble.bot{ background:linear-gradient(145deg, rgba(255,255,255,.30), rgba(255,255,255,.18));
+  border:1px solid rgba(255,255,255,.16); color:#f6fbff; }
+.chatwrap .stTextInput > div > div{ border-radius:6px !important; }
+.chatwrap .stTextInput input{ border-radius:6px !important; background:rgba(255,255,255,.08) !important;
+  border:1px solid rgba(255,255,255,.25) !important; box-shadow:none !important; }
 .chatwrap .sendbtn button,
 .chatwrap .sendbtn [data-testid="baseButton-primary"],
-.chatwrap .sendbtn [data-testid="baseButton-secondary"] {
-  background: linear-gradient(145deg, #ff7a1a, #ff5252) !important;
-  border: none !important; color: white !important; font-weight: 800 !important;
-  border-radius: 6px !important; height: 44px !important;
-  box-shadow: 0 10px 20px rgba(0,0,0,.25) !important;
-}
+.chatwrap .sendbtn [data-testid="baseButton-secondary"]{
+  background:linear-gradient(145deg, #ff7a1a, #ff5252) !important; border:none !important; color:white !important;
+  font-weight:800 !important; border-radius:6px !important; height:44px !important;
+  box-shadow:0 10px 20px rgba(0,0,0,.25) !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -136,8 +121,7 @@ def prepare_input_data(country, year, population, gdp, energy_per_capita,
     x["gdp_x_energy"] = x["gdp"] * energy_per_capita
     x["population_x_gdp"] = population * x["gdp"]
     cfeat = f"country_{country}"
-    if cfeat in x:
-        x[cfeat] = 1
+    if cfeat in x: x[cfeat] = 1
     return pd.DataFrame([x])
 
 def source_breakdown_charts(coal, oil, gas, cement, flaring):
@@ -155,51 +139,49 @@ def source_breakdown_charts(coal, oil, gas, cement, flaring):
         bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(bar, use_container_width=True)
 
-# ---------- GEMINI (auto-detect model via ListModels) ----------
+# ---------- GEMINI: model discovery + picker ----------
 DEFAULT_GEMINI_API_VERSION = "v1"
 
 def _get_gemini_key() -> str:
     return st.secrets.get("GEMINI_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
 
-def _get_gemini_version() -> str:
-    return (st.secrets.get("GEMINI_API_VERSION", DEFAULT_GEMINI_API_VERSION) or "").strip()
-
-def _get_gemini_model() -> str:
-    return (st.secrets.get("GEMINI_MODEL") or os.getenv("GEMINI_MODEL", "")).strip()
+def _normalize_model_selection(raw: str):
+    """Accept 'model-name' or 'vX/model-name' and return (version, name)."""
+    if not raw:
+        return None, None
+    if "/" in raw:
+        v, name = raw.split("/", 1)
+        return v.strip(), name.strip()
+    v = st.secrets.get("GEMINI_API_VERSION", DEFAULT_GEMINI_API_VERSION).strip() or DEFAULT_GEMINI_API_VERSION
+    return v, raw.strip()
 
 def _list_models(key: str, version: str) -> list:
-    """Fetch models visible to this key for the given API version."""
     try:
         url = f"https://generativelanguage.googleapis.com/{version}/models"
         r = requests.get(url, params={"key": key}, timeout=30)
         r.raise_for_status()
         return r.json().get("models", [])
     except Exception as e:
-        return [{"name": "ERROR", "displayName": f"Error listing models: {e}"}]
+        return [{"name": "ERROR", "displayName": f"Error listing models: {e}", "version": version}]
 
-def _pick_text_model(models: list) -> str | None:
-    """
-    Choose the first model that supports text generation.
-    Google returns 'supportedGenerationMethods' which includes 'generateContent' for text models.
-    """
+def _pick_text_models(models: list) -> list:
+    out = []
     for m in models:
         methods = m.get("supportedGenerationMethods") or []
-        # Fallback: some responses include 'generateContent' inside 'description' or stringified
         if ("generateContent" in methods) or ("generateContent" in str(m)):
-            return m.get("name")
-    return None
+            out.append(m)
+    return out
 
 def _gemini_reply(user_message: str, history: list) -> str:
     key = _get_gemini_key()
     if not key:
         return "❗ Gemini API key is missing. Add GEMINI_API_KEY in Streamlit Secrets."
 
-    # quick identity reply
     if user_message.strip().lower() in {"who are you", "who are you?", "who r u", "who r u?"}:
         return ("I'm a chatbot here to assist you with the Fossil Fuel Countdown project — "
                 "ask me anything about the experience, EVs, emissions, or what the charts mean.")
 
-    # Build chat contents
+    # build contents
     preface = {"role": "user", "parts": [{"text": PROJECT_CONTEXT}]}
     contents = [preface]
     for m in history:
@@ -207,24 +189,37 @@ def _gemini_reply(user_message: str, history: list) -> str:
         contents.append({"role": role, "parts": [{"text": m["content"]}]})
     contents.append({"role": "user", "parts": [{"text": user_message}]})
 
-    version = _get_gemini_version() or DEFAULT_GEMINI_API_VERSION
-    model = _get_gemini_model()
+    # determine model: session override -> secrets -> picker fallback
+    sess_choice = st.session_state.get("gemini_model_choice", "")
+    forced = st.secrets.get("GEMINI_MODEL", "") or os.getenv("GEMINI_MODEL", "")
+    version, model = (None, None)
+    if forced:
+        version, model = _normalize_model_selection(forced)
+    elif sess_choice:
+        version, model = _normalize_model_selection(sess_choice)
 
-    # If not forced by secrets, auto-discover a usable model
-    discovered_list_shown = False
     if not model:
-        models = _list_models(key, version)
-        chosen = _pick_text_model(models)
-        if not chosen:
-            # show compact list of model names for the user
-            names = [m.get("name") for m in models]
-            st.warning("No text-generation model found for your key. Available models:\n\n" +
-                       "\n".join(f"- {n}" for n in names if n))
-            discovered_list_shown = True
-            return ("❗ No usable text model found for your key.\n\n"
-                    "Pick one of the names shown above (if any) and set it in Streamlit Secrets:\n"
-                    "`GEMINI_MODEL = <model-id>`")
-        model = chosen
+        # auto-discover across v1 and v1beta
+        discovered = []
+        for v in ("v1", "v1beta"):
+            ms = _list_models(key, v)
+            for m in ms:
+                m["_apiVersion"] = v  # tag for UI
+            discovered.extend(ms)
+        usable = _pick_text_models(discovered)
+        if not usable:
+            # Surface what we found for troubleshooting
+            names = [f"{m.get('_apiVersion','?')}/{m.get('name')}" for m in discovered if m.get("name")]
+            hint = "\n".join(f"- {n}" for n in names) or "(no models returned)"
+            st.warning("No text-generation models available to this key.\n\n" + hint)
+            return ("❗ Your API key doesn't show any text models via ListModels.\n"
+                    "Please check: 1) You’re using an **AI Studio** key (not Vertex AI-only), "
+                    "2) The **Generative Language API** is enabled for your project, "
+                    "3) Your account/region has access to Gemini text models.")
+        # pick first usable
+        chosen = usable[0]
+        version = chosen.get("_apiVersion", "v1")
+        model = chosen.get("name")
 
     url = f"https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent"
     try:
@@ -235,20 +230,6 @@ def _gemini_reply(user_message: str, history: list) -> str:
             json={"contents": contents},
             timeout=60,
         )
-        # If the chosen model 404s (region/visibility quirks), try discovery once
-        if r.status_code == 404 and not discovered_list_shown and not _get_gemini_model():
-            models = _list_models(key, version)
-            chosen = _pick_text_model(models)
-            if chosen and chosen != model:
-                model2 = chosen
-                url2 = f"https://generativelanguage.googleapis.com/{version}/models/{model2}:generateContent"
-                r = requests.post(
-                    url2,
-                    params={"key": key},
-                    headers={"Content-Type": "application/json"},
-                    json={"contents": contents},
-                    timeout=60,
-                )
         r.raise_for_status()
         data = r.json()
         cands = data.get("candidates") or []
@@ -262,15 +243,47 @@ def _gemini_reply(user_message: str, history: list) -> str:
         return "No response."
     except requests.HTTPError as e:
         body = getattr(e, "response", None)
-        # Helpful guidance for 404s
         if body is not None and body.status_code == 404:
-            return ("❗ Model not available for your key/region.\n"
-                    "Open **Settings → Secrets** and set a model returned by ListModels, e.g.:\n"
-                    "`GEMINI_MODEL = <model-id>`\n\n"
+            return ("❗ The selected model isn’t available for your key/region.\n"
+                    "Choose another model from the picker below, or set `GEMINI_MODEL` "
+                    "in Secrets to an ID that appears in ListModels.\n\n"
                     f"Server message: {body.text}")
         return f"HTTP error: {e} – {(body.text if body is not None else '')}"
     except Exception as e:
         return f"Error calling Gemini: {e}"
+
+def _models_picker_ui():
+    """Sidebar/expander UI to show ListModels and let you pick one."""
+    key = _get_gemini_key()
+    if not key:
+        st.info("Add GEMINI_API_KEY in Streamlit Secrets to see available models.")
+        return
+    with st.expander("🧪 Gemini: Available models & picker", expanded=False):
+        rows = []
+        for v in ("v1", "v1beta"):
+            ms = _list_models(key, v)
+            for m in ms:
+                rows.append({
+                    "api_version": v,
+                    "name": m.get("name"),
+                    "displayName": m.get("displayName"),
+                    "methods": ", ".join(m.get("supportedGenerationMethods", [])) or "-",
+                })
+        if rows:
+            df = pd.DataFrame(rows).sort_values(["api_version", "name"])
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            # Build dropdown of only text-capable models
+            text_options = [f"{r['api_version']}/{r['name']}" for r in rows if "generateContent" in r["methods"]]
+            st.selectbox(
+                "Pick a model to use now (stored in session, not secrets):",
+                options=[""] + text_options,
+                index=0,
+                key="gemini_model_choice",
+                help="Once you find a working one, you can put it into Secrets as GEMINI_MODEL."
+            )
+        else:
+            st.write("No models returned by ListModels. If you’re using a Vertex AI key, "
+                     "switch to an AI Studio key or use Vertex endpoints (aiplatform).")
 
 # ---------- HEADER ----------
 st.markdown("""
@@ -280,13 +293,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-tabs = st.tabs([
-    "🔮 CO₂ Predictor",
-    "🚗 EV Benefits",
-    "🌱 Environmental Impact",
-    "📊 EV Statistics",
-    "💬 Chatbot"
-])
+tabs = st.tabs(["🔮 CO₂ Predictor", "🚗 EV Benefits", "🌱 Environmental Impact", "📊 EV Statistics", "💬 Chatbot"])
 
 # ---- CO₂ Predictor ----
 with tabs[0]:
@@ -324,66 +331,40 @@ with tabs[0]:
     else:
         if st.button("🔮 Predict CO₂ Emissions", type="primary"):
             try:
-                X = prepare_input_data(
-                    country, year, population, gdp, energy_per_capita,
-                    primary_energy, cement, coal, oil, gas, flaring, methane, nitrous, features
-                )
+                X = prepare_input_data(country, year, population, gdp, energy_per_capita,
+                                       primary_energy, cement, coal, oil, gas, flaring, methane, nitrous, features)
                 Xs = scaler.transform(X)
                 predicted = float(model.predict(Xs)[0])  # Mt
                 per_capita_t = (predicted * 1e6) / max(population, 1) / 1e3
-                vs = 4.8
-                delta = per_capita_t - vs
-                comp = "above" if delta > 0 else "below"
+                vs = 4.8; delta = per_capita_t - vs; comp = "above" if delta > 0 else "below"
 
                 kc1, kc2, kc3 = st.columns(3)
                 with kc1:
-                    st.markdown(
-                        f'<div class="kpi"><div class="big">{predicted:,.2f} Mt</div>'
-                        f'<small>Predicted total CO₂</small></div>',
-                        unsafe_allow_html=True
-                    )
+                    st.markdown(f'<div class="kpi"><div class="big">{predicted:,.2f} Mt</div>'
+                                f'<small>Predicted total CO₂</small></div>', unsafe_allow_html=True)
                 with kc2:
-                    st.markdown(
-                        f'<div class="kpi"><div class="big">{per_capita_t:,.2f} t</div>'
-                        f'<small>Per-capita emissions</small></div>',
-                        unsafe_allow_html=True
-                    )
+                    st.markdown(f'<div class="kpi"><div class="big">{per_capita_t:,.2f} t</div>'
+                                f'<small>Per-capita emissions</small></div>', unsafe_allow_html=True)
                 with kc3:
-                    st.markdown(
-                        f'<div class="kpi"><div class="big">{abs(delta):.1f} t</div>'
-                        f'<small>{comp} world avg (~4.8 t)</small></div>',
-                        unsafe_allow_html=True
-                    )
+                    st.markdown(f'<div class="kpi"><div class="big">{abs(delta):.1f} t</div>'
+                                f'<small>{comp} world avg (~4.8 t)</small></div>', unsafe_allow_html=True)
 
-                # Historical vs Predicted chart
-                if data is not None and {'country', 'year', 'co2'}.issubset(data.columns):
-                    dctry = data[data['country'] == country].dropna(subset=['year', 'co2'])
+                if data is not None and {'country','year','co2'}.issubset(data.columns):
+                    dctry = data[data['country']==country].dropna(subset=['year','co2'])
                     if not dctry.empty:
-                        hist_df = dctry[['year', 'co2']].sort_values('year')
-                        fig = px.line(
-                            hist_df, x='year', y='co2',
-                            title=f"Historical CO₂ for {country} with {year} prediction",
-                            labels={'year': 'Year', 'co2': 'CO₂ (Mt)'},
-                            markers=True
-                        )
-                        fig.add_scatter(
-                            x=[year], y=[predicted], mode='markers+text',
-                            name='Predicted', text=[f"{predicted:,.0f}"],
-                            textposition='top center'
-                        )
+                        hist_df = dctry[['year','co2']].sort_values('year')
+                        fig = px.line(hist_df, x='year', y='co2',
+                                      title=f"Historical CO₂ for {country} with {year} prediction",
+                                      labels={'year':'Year','co2':'CO₂ (Mt)'}, markers=True)
+                        fig.add_scatter(x=[year], y=[predicted], mode='markers+text',
+                                        name='Predicted', text=[f"{predicted:,.0f}"], textposition='top center')
                         fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
                         st.plotly_chart(fig, use_container_width=True)
             except Exception as e:
                 st.error(f"Prediction failed: {e}")
 
     st.markdown('<div class="section-title">Source Mix</div>', unsafe_allow_html=True)
-    # use the most recent inputs from the sidebar (they exist in the current scope)
-    # Provide defaults in case the user hasn't interacted yet
-    coal = locals().get("coal", 1200.0)
-    oil = locals().get("oil", 800.0)
-    gas = locals().get("gas", 600.0)
-    cement = locals().get("cement", 50.0)
-    flaring = locals().get("flaring", 10.0)
+    # Use last sidebar values (they exist in scope already)
     source_breakdown_charts(coal, oil, gas, cement, flaring)
 
 # ---- EV Benefits ----
@@ -415,21 +396,16 @@ with tabs[1]:
 
     d1, d2 = st.columns(2)
     with d1:
-        pie = px.pie(
-            names=["Gasoline (fuel+maint)", "EV (energy+maint)"],
-            values=[annual_gas_cost + maint_gas, annual_elec_cost + maint_ev],
-            hole=.35,
-            title="Annual running cost split"
-        )
+        pie = px.pie(names=["Gasoline (fuel+maint)", "EV (energy+maint)"],
+                     values=[annual_gas_cost + maint_gas, annual_elec_cost + maint_ev],
+                     hole=.35, title="Annual running cost split")
         pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(pie, use_container_width=True)
     with d2:
         yrs = np.arange(1, years + 1)
-        df = pd.DataFrame({
-            "Year": yrs,
-            "Gasoline Total ($)": yrs * (annual_gas_cost + maint_gas),
-            "EV Total ($)": yrs * (annual_elec_cost + maint_ev)
-        })
+        df = pd.DataFrame({"Year": yrs,
+                           "Gasoline Total ($)": yrs * (annual_gas_cost + maint_gas),
+                           "EV Total ($)": yrs * (annual_elec_cost + maint_ev)})
         line = px.line(df, x="Year", y=["Gasoline Total ($)", "EV Total ($)"], markers=True,
                        title=f"Cumulative cost over {years} years")
         line.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
@@ -467,12 +443,15 @@ with tabs[3]:
 # ---- Chatbot ----
 with tabs[4]:
     if "chat_messages" not in st.session_state:
-        st.session_state.chat_messages = [
-            {"role": "model",
-             "content": "Hi there! I'm ready to answer any questions you have about the "
+        st.session_state.chat_messages = [{
+            "role": "model",
+            "content": ("Hi there! I'm ready to answer any questions you have about the "
                         '"Fossil Fuel Countdown: The Race to EV & Renewables" project. '
-                        "What would you like to know?"}
-        ]
+                        "What would you like to know?")
+        }]
+
+    # Model picker UI (look here if you get 404s)
+    _models_picker_ui()
 
     st.markdown('<div class="chatwrap"><div class="chatcard">', unsafe_allow_html=True)
     st.markdown('<div class="chatstream">', unsafe_allow_html=True)
