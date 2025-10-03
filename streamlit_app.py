@@ -1,4 +1,4 @@
-# app.py — Fossil Fuel COUNTDOWN (model picker built-in)
+# app.py — Fossil Fuel COUNTDOWN (Gemini model picker + fixed ListModels handling)
 
 import os
 import warnings
@@ -139,21 +139,33 @@ def source_breakdown_charts(coal, oil, gas, cement, flaring):
         bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(bar, use_container_width=True)
 
-# ---------- GEMINI: model discovery + picker ----------
+# ---------- GEMINI: model discovery + picker (FIXED: strip "models/" prefix) ----------
 DEFAULT_GEMINI_API_VERSION = "v1"
 
 def _get_gemini_key() -> str:
     return st.secrets.get("GEMINI_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
 
+def _strip_models_prefix(name: str) -> str:
+    return (name or "").split("/")[-1]
+
+def _get_gemini_version() -> str:
+    return (st.secrets.get("GEMINI_API_VERSION", DEFAULT_GEMINI_API_VERSION) or "").strip() or DEFAULT_GEMINI_API_VERSION
+
 def _normalize_model_selection(raw: str):
-    """Accept 'model-name' or 'vX/model-name' and return (version, name)."""
+    """
+    Accept:
+      - "gemini-1.5-flash-8b"
+      - "v1/gemini-1.5-flash-8b"
+      - "v1/models/gemini-1.5-flash-8b"
+    Return: (version, cleaned_model_id)
+    """
     if not raw:
         return None, None
-    if "/" in raw:
-        v, name = raw.split("/", 1)
-        return v.strip(), name.strip()
-    v = st.secrets.get("GEMINI_API_VERSION", DEFAULT_GEMINI_API_VERSION).strip() or DEFAULT_GEMINI_API_VERSION
-    return v, raw.strip()
+    parts = raw.split("/", 1)
+    if len(parts) == 1:
+        return _get_gemini_version(), _strip_models_prefix(parts[0])
+    version, rest = parts[0].strip(), parts[1].strip()
+    return version, _strip_models_prefix(rest)
 
 def _list_models(key: str, version: str) -> list:
     try:
@@ -165,12 +177,13 @@ def _list_models(key: str, version: str) -> list:
         return [{"name": "ERROR", "displayName": f"Error listing models: {e}", "version": version}]
 
 def _pick_text_models(models: list) -> list:
-    out = []
+    usable = []
     for m in models:
         methods = m.get("supportedGenerationMethods") or []
         if ("generateContent" in methods) or ("generateContent" in str(m)):
-            out.append(m)
-    return out
+            m["_cleanId"] = _strip_models_prefix(m.get("name", ""))
+            usable.append(m)
+    return usable
 
 def _gemini_reply(user_message: str, history: list) -> str:
     key = _get_gemini_key()
@@ -181,7 +194,7 @@ def _gemini_reply(user_message: str, history: list) -> str:
         return ("I'm a chatbot here to assist you with the Fossil Fuel Countdown project — "
                 "ask me anything about the experience, EVs, emissions, or what the charts mean.")
 
-    # build contents
+    # Build chat contents
     preface = {"role": "user", "parts": [{"text": PROJECT_CONTEXT}]}
     contents = [preface]
     for m in history:
@@ -189,39 +202,37 @@ def _gemini_reply(user_message: str, history: list) -> str:
         contents.append({"role": role, "parts": [{"text": m["content"]}]})
     contents.append({"role": "user", "parts": [{"text": user_message}]})
 
-    # determine model: session override -> secrets -> picker fallback
-    sess_choice = st.session_state.get("gemini_model_choice", "")
+    # Decide model: secrets → session picker → discover
     forced = st.secrets.get("GEMINI_MODEL", "") or os.getenv("GEMINI_MODEL", "")
-    version, model = (None, None)
+    sess_choice = st.session_state.get("gemini_model_choice", "")
+    version, model_id = (None, None)
     if forced:
-        version, model = _normalize_model_selection(forced)
+        version, model_id = _normalize_model_selection(forced)
     elif sess_choice:
-        version, model = _normalize_model_selection(sess_choice)
+        version, model_id = _normalize_model_selection(sess_choice)
+    else:
+        version = _get_gemini_version()
 
-    if not model:
-        # auto-discover across v1 and v1beta
+    if not model_id:
         discovered = []
         for v in ("v1", "v1beta"):
             ms = _list_models(key, v)
             for m in ms:
-                m["_apiVersion"] = v  # tag for UI
+                m["_apiVersion"] = v
             discovered.extend(ms)
         usable = _pick_text_models(discovered)
         if not usable:
-            # Surface what we found for troubleshooting
             names = [f"{m.get('_apiVersion','?')}/{m.get('name')}" for m in discovered if m.get("name")]
             hint = "\n".join(f"- {n}" for n in names) or "(no models returned)"
             st.warning("No text-generation models available to this key.\n\n" + hint)
             return ("❗ Your API key doesn't show any text models via ListModels.\n"
-                    "Please check: 1) You’re using an **AI Studio** key (not Vertex AI-only), "
-                    "2) The **Generative Language API** is enabled for your project, "
-                    "3) Your account/region has access to Gemini text models.")
-        # pick first usable
+                    "Please ensure you're using an **AI Studio** key and the **Gemini API** "
+                    "is enabled with billing/quota.")
         chosen = usable[0]
-        version = chosen.get("_apiVersion", "v1")
-        model = chosen.get("name")
+        version = chosen.get("_apiVersion", version or "v1")
+        model_id = chosen.get("_cleanId")
 
-    url = f"https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent"
+    url = f"https://generativelanguage.googleapis.com/{version}/models/{model_id}:generateContent"
     try:
         r = requests.post(
             url,
@@ -245,15 +256,15 @@ def _gemini_reply(user_message: str, history: list) -> str:
         body = getattr(e, "response", None)
         if body is not None and body.status_code == 404:
             return ("❗ The selected model isn’t available for your key/region.\n"
-                    "Choose another model from the picker below, or set `GEMINI_MODEL` "
-                    "in Secrets to an ID that appears in ListModels.\n\n"
+                    "Pick another from the picker below, or set `GEMINI_MODEL` in Secrets "
+                    "to a name shown by ListModels.\n\n"
                     f"Server message: {body.text}")
         return f"HTTP error: {e} – {(body.text if body is not None else '')}"
     except Exception as e:
         return f"Error calling Gemini: {e}"
 
 def _models_picker_ui():
-    """Sidebar/expander UI to show ListModels and let you pick one."""
+    """UI to show ListModels and let you pick one (stores in session)."""
     key = _get_gemini_key()
     if not key:
         st.info("Add GEMINI_API_KEY in Streamlit Secrets to see available models.")
@@ -265,25 +276,26 @@ def _models_picker_ui():
             for m in ms:
                 rows.append({
                     "api_version": v,
-                    "name": m.get("name"),
+                    "name_raw": m.get("name"),
+                    "name": _strip_models_prefix(m.get("name", "")),  # cleaned
                     "displayName": m.get("displayName"),
                     "methods": ", ".join(m.get("supportedGenerationMethods", [])) or "-",
                 })
         if rows:
             df = pd.DataFrame(rows).sort_values(["api_version", "name"])
-            st.dataframe(df, use_container_width=True, hide_index=True)
-            # Build dropdown of only text-capable models
+            st.dataframe(df[["api_version","name","displayName","methods"]],
+                         use_container_width=True, hide_index=True)
             text_options = [f"{r['api_version']}/{r['name']}" for r in rows if "generateContent" in r["methods"]]
             st.selectbox(
-                "Pick a model to use now (stored in session, not secrets):",
+                "Pick a model to use now (session only):",
                 options=[""] + text_options,
                 index=0,
                 key="gemini_model_choice",
-                help="Once you find a working one, you can put it into Secrets as GEMINI_MODEL."
+                help="After finding a working one, store it in Secrets as GEMINI_MODEL."
             )
         else:
             st.write("No models returned by ListModels. If you’re using a Vertex AI key, "
-                     "switch to an AI Studio key or use Vertex endpoints (aiplatform).")
+                     "switch to an AI Studio key or use Vertex endpoints.")
 
 # ---------- HEADER ----------
 st.markdown("""
@@ -364,7 +376,6 @@ with tabs[0]:
                 st.error(f"Prediction failed: {e}")
 
     st.markdown('<div class="section-title">Source Mix</div>', unsafe_allow_html=True)
-    # Use last sidebar values (they exist in scope already)
     source_breakdown_charts(coal, oil, gas, cement, flaring)
 
 # ---- EV Benefits ----
@@ -450,7 +461,7 @@ with tabs[4]:
                         "What would you like to know?")
         }]
 
-    # Model picker UI (look here if you get 404s)
+    # Model picker UI (open this if you get 404s)
     _models_picker_ui()
 
     st.markdown('<div class="chatwrap"><div class="chatcard">', unsafe_allow_html=True)
